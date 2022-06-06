@@ -22,6 +22,7 @@ This repository contains the yaml files and test scripts to test all the traffic
 - [Test Script Usage](#test-script-usage)
   - [curl](#curl)
   - [iperf3](#iperf3)
+  - [Hardware Offload Validation](#hardware-offload-validation)
   - [ovnkube-trace](#ovnkube-trace)
 - [Container Images](#container-images)
 - [Multi-Cluster](#multi-cluster)
@@ -307,6 +308,9 @@ This script uses ENV Variables to control test. Here are few key ones:
                                  VERBOSE=true ./test.sh
   IPERF                      - 'iperf3' can be run on each flow, off by default. Example:
                                  IPERF=true ./test.sh
+  HWOL                       - Hardware Offload Validation can be run on each applicable flow."
+                                 Parameters from IPERF will be used to generate traffic. Example:"
+                                 HWOL=true ./test.sh"
   OVN_TRACE                  - 'ovn-trace' can be run on each flow, off by deafult. Example:
                                  OVN_TRACE=true ./test.sh
   FT_VARS                    - Print script variables. Off by default. Example:
@@ -362,7 +366,7 @@ Default/Override Values:
     FT_SERVER_NODE_LABEL               ft.ServerPod
     FT_CLIENT_NODE_LABEL               ft.ClientPod
 ```
-  
+
 ### Cleanup Test Pods
 
 To teardown the test setup:
@@ -541,6 +545,11 @@ and default is 10 seconds):
 TEST_CASE=3 IPERF=true IPERF_TIME=2 ./test.sh
 ```
 
+* Hardware Offload Validation is disabled by default. To enable:
+```
+TEST_CASE=3 HWOL=true ./test.sh
+```
+
 * `ovnkube-trace` is disabled by default. To enable:
 ```
 TEST_CASE=3 OVN_TRACE=true ./test.sh
@@ -681,6 +690,243 @@ in and set by the script. Example:
 FT_CLIENT_CPU_MASK=0x100 TEST_CASE=1 IPERF=true CURL=false ./test.sh
 ```
 
+### Hardware Offload Validation
+
+Hardware Offload Validation is used to determine whether a flow has been hardware
+offloaded by examining the RX/TX packet counters from `ethtool` on the
+VF representors. When enabled, `iperf3` is run, `ethtool` on the VF representor is run at
+the beginning and end of the `iperf3` duration, `tcpdump` on the VF representor is run
+during the `iperf3` duration, lastly a summary of the results is printed.
+
+```
+$ TEST_CASE=1 HWOL=true ./test.sh
+
+FLOW 01: Pod to Pod traffic
+---------------------------
+
+*** 1-a: Pod to Pod (Same Node) ***
+
+admin:worker-advnetlab23 -> admin:worker-advnetlab23
+kubectl exec -it -n default ft-client-pod-sriov-f2c7t -- curl -m 5 "http://10.131.0.36:8080/etc/httpserver/"
+SUCCESS
+
+kubectl get pods -n default --selector=name=ft-tools -o wide | grep -w "worker-advnetlab23" | awk -F' ' '{print }'
+kubectl get pods -n default --selector=name=ft-tools -o wide | grep -w "worker-advnetlab23" | awk -F' ' '{print }'
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "chroot /host /bin/bash -c "crictl ps -a --name=ft-iperf-server-pod-v4 -o json | jq -r ".containers[].podSandboxId"""
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "chroot /host /bin/bash -c "crictl ps -a --name=ft-client-pod -o json | jq -r ".containers[].podSandboxId"""
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "chroot /host /bin/bash -c "crictl ps -a --name=ft-client-pod -o json | jq -r ".containers[].podSandboxId"""
+Variables Used For Hardware Offload Validation:
+================================================
+  TOOLS_CLIENT_POD=ft-tools-5dhvc
+  TOOLS_SERVER_POD=ft-tools-5dhvc
+  TEST_SERVER_IPERF_SERVER_PODID=32b85d25dbab278bb7fdb78aab9915a39716a09ef82b73fb97f823b9d26cba5f
+  TEST_SERVER_CLIENT_PODID=4974dd867bd1648445147f8a11f134530a6e5e4cad6b446ec8b942109939e8fa
+  TEST_CLIENT_CLIENT_PODID=4974dd867bd1648445147f8a11f134530a6e5e4cad6b446ec8b942109939e8fa
+  TEST_SERVER_IPERF_SERVER_VF_REP=32b85d25dbab278
+  TEST_SERVER_CLIENT_VF_REP=4974dd867bd1648
+  TEST_CLIENT_CLIENT_VF_REP=4974dd867bd1648
+================================================
+admin:worker-advnetlab23 -> admin:worker-advnetlab23
+kubectl exec -it -n default ft-client-pod-sriov-f2c7t --  iperf3 -c 10.131.0.37 -p 5201 -t 40
+Unable to use a TTY - input is not a terminal or the right kind of file
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 4974dd867bd1648 | sed -n 's/^\s\+//p'"
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "timeout --preserve-status 25 tcpdump -i 4974dd867bd1648 -n not arp"
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 4974dd867bd1648 | sed -n 's/^\s\+//p'"
+Ethtool results for 4974dd867bd1648:
+=================================================
+RX Packets: 268556635 - 268556635 = 0
+TX Packets: 5570833 - 5570833 = 0
+Summary Tcpdump Output (see hwol-logs/01-a-pod2pod-sameNode.txt for full detail):
+dropped privs to tcpdump
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on 4974dd867bd1648, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+
+0 packets captured
+0 packets received by filter
+0 packets dropped by kernel
+Summary Iperf Output (see hwol-logs/01-a-pod2pod-sameNode.txt for full detail):
+[ ID] Interval           Transfer     Bitrate         Retr
+[  5]   0.00-40.00  sec   128 GBytes  27.4 Gbits/sec  18067             sender
+[  5]   0.00-40.00  sec   128 GBytes  27.4 Gbits/sec                  receiver
+
+admin:worker-advnetlab23 -> admin:worker-advnetlab23
+kubectl exec -it -n default ft-client-pod-sriov-f2c7t --  iperf3 -c 10.131.0.37 -p 5201 -t 40
+Unable to use a TTY - input is not a terminal or the right kind of file
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 4974dd867bd1648 | sed -n 's/^\s\+//p'"
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "timeout --preserve-status 25 tcpdump -i 4974dd867bd1648 -n not arp"
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 4974dd867bd1648 | sed -n 's/^\s\+//p'"
+Ethtool results for 4974dd867bd1648:
+=================================================
+RX Packets: 268556818 - 268556818 = 0
+TX Packets: 5570870 - 5570870 = 0
+Summary Tcpdump Output (see hwol-logs/01-a-pod2pod-sameNode.txt for full detail):
+dropped privs to tcpdump
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on 4974dd867bd1648, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+
+0 packets captured
+0 packets received by filter
+0 packets dropped by kernel
+Summary Iperf Output (see hwol-logs/01-a-pod2pod-sameNode.txt for full detail):
+[ ID] Interval           Transfer     Bitrate         Retr
+[  5]   0.00-40.00  sec   118 GBytes  25.4 Gbits/sec  18167             sender
+[  5]   0.00-40.00  sec   118 GBytes  25.4 Gbits/sec                  receiver
+admin:worker-advnetlab23 -> admin:worker-advnetlab23
+kubectl exec -it -n default ft-client-pod-sriov-f2c7t --  iperf3 -c 10.131.0.37 -p 5201 -t 40
+Unable to use a TTY - input is not a terminal or the right kind of file
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 32b85d25dbab278 | sed -n 's/^\s\+//p'"
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "timeout --preserve-status 25 tcpdump -i 32b85d25dbab278 -n not arp"
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 32b85d25dbab278 | sed -n 's/^\s\+//p'"
+Ethtool results for 4974dd867bd1648:
+=================================================
+RX Packets: 9405785 - 9405785 = 0
+TX Packets: 468017326 - 468017326 = 0
+Summary Tcpdump Output (see hwol-logs/01-a-pod2pod-sameNode.txt for full detail):
+dropped privs to tcpdump
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on 32b85d25dbab278, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+
+0 packets captured
+0 packets received by filter
+0 packets dropped by kernel
+Summary Iperf Output (see hwol-logs/01-a-pod2pod-sameNode.txt for full detail):
+[ ID] Interval           Transfer     Bitrate         Retr
+[  5]   0.00-40.00  sec   122 GBytes  26.3 Gbits/sec  13261             sender
+[  5]   0.00-40.00  sec   122 GBytes  26.3 Gbits/sec                  receiver
+SUCCESS
+
+*** 1-b: Pod to Pod (Different Node) ***
+
+admin:worker-advnetlab24 -> admin:worker-advnetlab23
+kubectl exec -it -n default ft-client-pod-sriov-vn629 -- curl -m 5 "http://10.131.0.36:8080/etc/httpserver/"
+SUCCESS
+
+kubectl get pods -n default --selector=name=ft-tools -o wide | grep -w "worker-advnetlab24" | awk -F' ' '{print }'
+kubectl get pods -n default --selector=name=ft-tools -o wide | grep -w "worker-advnetlab23" | awk -F' ' '{print }'
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "chroot /host /bin/bash -c "crictl ps -a --name=ft-iperf-server-pod-v4 -o json | jq -r ".containers[].podSandboxId"""
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "chroot /host /bin/bash -c "crictl ps -a --name=ft-client-pod -o json | jq -r ".containers[].podSandboxId"""
+kubectl exec -it -n "default" "ft-tools-49dr6" -- /bin/sh -c "chroot /host /bin/bash -c "crictl ps -a --name=ft-client-pod -o json | jq -r ".containers[].podSandboxId"""
+Variables Used For Hardware Offload Validation:
+================================================
+  TOOLS_CLIENT_POD=ft-tools-49dr6
+  TOOLS_SERVER_POD=ft-tools-5dhvc
+  TEST_SERVER_IPERF_SERVER_PODID=32b85d25dbab278bb7fdb78aab9915a39716a09ef82b73fb97f823b9d26cba5f
+  TEST_SERVER_CLIENT_PODID=4974dd867bd1648445147f8a11f134530a6e5e4cad6b446ec8b942109939e8fa
+  TEST_CLIENT_CLIENT_PODID=66137d1fda0868422164c88fadac9aeb6ebdfb1e3f45d33c31ff356d8c693562
+  TEST_SERVER_IPERF_SERVER_VF_REP=32b85d25dbab278
+  TEST_SERVER_CLIENT_VF_REP=4974dd867bd1648
+  TEST_CLIENT_CLIENT_VF_REP=66137d1fda08684
+================================================
+admin:worker-advnetlab24 -> admin:worker-advnetlab23
+kubectl exec -it -n default ft-client-pod-sriov-vn629 --  iperf3 -c 10.131.0.37 -p 5201 -t 40
+Unable to use a TTY - input is not a terminal or the right kind of file
+kubectl exec -it -n "default" "ft-tools-49dr6" -- /bin/sh -c "ethtool -S 66137d1fda08684 | sed -n 's/^\s\+//p'"
+kubectl exec -it -n "default" "ft-tools-49dr6" -- /bin/sh -c "timeout --preserve-status 25 tcpdump -i 66137d1fda08684 -n not arp"
+kubectl exec -it -n "default" "ft-tools-49dr6" -- /bin/sh -c "ethtool -S 66137d1fda08684 | sed -n 's/^\s\+//p'"
+Ethtool results for 66137d1fda08684:
+=================================================
+RX Packets: 61154401 - 61154401 = 0
+TX Packets: 2734449 - 2734449 = 0
+Summary Tcpdump Output (see hwol-logs/01-b-pod2pod-diffNode.txt for full detail):
+dropped privs to tcpdump
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on 66137d1fda08684, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+
+0 packets captured
+0 packets received by filter
+0 packets dropped by kernel
+Summary Iperf Output (see hwol-logs/01-b-pod2pod-diffNode.txt for full detail):
+[ ID] Interval           Transfer     Bitrate         Retr
+[  5]   0.00-40.00  sec   132 GBytes  28.4 Gbits/sec  21117             sender
+[  5]   0.00-40.00  sec   132 GBytes  28.4 Gbits/sec                  receiver
+admin:worker-advnetlab24 -> admin:worker-advnetlab23
+kubectl exec -it -n default ft-client-pod-sriov-vn629 --  iperf3 -c 10.131.0.37 -p 5201 -t 40
+Unable to use a TTY - input is not a terminal or the right kind of file
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 4974dd867bd1648 | sed -n 's/^\s\+//p'"
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "timeout --preserve-status 25 tcpdump -i 4974dd867bd1648 -n not arp"
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 4974dd867bd1648 | sed -n 's/^\s\+//p'"
+Ethtool results for 66137d1fda08684:
+=================================================
+RX Packets: 268556885 - 268556885 = 0
+TX Packets: 5570931 - 5570931 = 0
+Summary Tcpdump Output (see hwol-logs/01-b-pod2pod-diffNode.txt for full detail):
+dropped privs to tcpdump
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on 4974dd867bd1648, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+
+0 packets captured
+0 packets received by filter
+0 packets dropped by kernel
+Summary Iperf Output (see hwol-logs/01-b-pod2pod-diffNode.txt for full detail):
+[ ID] Interval           Transfer     Bitrate         Retr
+[  5]   0.00-40.00  sec   133 GBytes  28.6 Gbits/sec  26052             sender
+[  5]   0.00-40.00  sec   133 GBytes  28.6 Gbits/sec                  receiver
+admin:worker-advnetlab24 -> admin:worker-advnetlab23
+kubectl exec -it -n default ft-client-pod-sriov-vn629 --  iperf3 -c 10.131.0.37 -p 5201 -t 40
+Unable to use a TTY - input is not a terminal or the right kind of file
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 32b85d25dbab278 | sed -n 's/^\s\+//p'"
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "timeout --preserve-status 25 tcpdump -i 32b85d25dbab278 -n not arp"
+kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 32b85d25dbab278 | sed -n 's/^\s\+//p'"
+Ethtool results for 66137d1fda08684:
+=================================================
+RX Packets: 9406025 - 9406025 = 0
+TX Packets: 468018983 - 468018983 = 0
+Summary Tcpdump Output (see hwol-logs/01-b-pod2pod-diffNode.txt for full detail):
+dropped privs to tcpdump
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on 32b85d25dbab278, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+
+0 packets captured
+0 packets received by filter
+0 packets dropped by kernel
+Summary Iperf Output (see hwol-logs/01-b-pod2pod-diffNode.txt for full detail):
+[ ID] Interval           Transfer     Bitrate         Retr
+[  5]   0.00-40.00  sec   131 GBytes  28.2 Gbits/sec  18876             sender
+[  5]   0.00-40.00  sec   131 GBytes  28.2 Gbits/sec                  receiver
+SUCCESS
+```
+
+When Hardware Offload Validation is run on each sub-flow, the full output of the command
+is piped to files in the `hwol-logs/` directory. Use `VERBOSE=true` to when command is
+executed to see full output command is run. Below is a list of sample output files:
+
+```
+$ ls -al hwol-logs
+total 1547744
+drwxr-xr-x. 2 root root      4096 Jun  6 14:59 .
+drwxr-xr-x. 9 root root      4096 Jun  6 13:42 ..
+-rw-r--r--. 1 root root     13058 Jun  6 14:57 01-a-pod2pod-sameNode.txt
+-rw-r--r--. 1 root root     13056 Jun  6 14:59 01-b-pod2pod-diffNode.txt
+-rw-r--r--. 1 root root     12971 Jun  6 13:55 03-a-pod2clusterIpSvc-podBackend-sameNode.txt
+-rw-r--r--. 1 root root     12982 Jun  6 13:57 03-b-pod2clusterIpSvc-podBackend-diffNode.txt
+-rw-r--r--. 1 root root 318635472 Jun  6 13:59 04-a-pod2clusterIpSvc-hostBackend-sameNode.txt
+-rw-r--r--. 1 root root  84774187 Jun  6 14:01 04-b-pod2clusterIpSvc-hostBackend-diffNode.txt
+-rw-r--r--. 1 root root     13048 Jun  6 14:03 05-a-pod2nodePortSvc-podBackend-sameNode.txt
+-rw-r--r--. 1 root root  58930897 Jun  6 14:05 05-b-pod2nodePortSvc-podBackend-diffNode.txt
+-rw-r--r--. 1 root root 317456208 Jun  6 14:07 06-a-pod2nodePortSvc-hostBackend-sameNode.txt
+-rw-r--r--. 1 root root  50976438 Jun  6 14:09 06-b-pod2nodePortSvc-hostBackend-diffNode.txt
+-rw-r--r--. 1 root root 366287506 Jun  6 14:11 09-a-host2clusterIpSvc-podBackend-sameNode.txt
+-rw-r--r--. 1 root root     13063 Jun  6 14:13 09-b-host2clusterIpSvc-podBackend-diffNode.txt
+-rw-r--r--. 1 root root     13071 Jun  6 14:15 10-a-host2clusterIpSvc-hostBackend-sameNode.txt
+-rw-r--r--. 1 root root     13064 Jun  6 14:17 10-b-host2clusterIpSvc-hostBackend-diffNode.txt
+-rw-r--r--. 1 root root 331478263 Jun  6 14:20 11-a-host2nodePortSvc-podBackend-sameNode.txt
+-rw-r--r--. 1 root root  56179522 Jun  6 14:22 11-b-host2nodePortSvc-podBackend-diffNode.txt
+-rw-r--r--. 1 root root     13003 Jun  6 14:24 12-a-host2nodePortSvc-hostBackend-sameNode.txt
+-rw-r--r--. 1 root root      2566 Jun  6 14:25 12-b-host2nodePortSvc-hostBackend-diffNode.txt
+```
+
+*NOTE:* The *'cleanup.sh'* script does not remove these files and each subsequent run of
+*'test.sh'* overwrites the previous test run. They can be removed manually or using
+`CLEAN_ALL=true ./cleanup.sh`.
+
+An additional variable is supported when running Hardware Offload Validation that allows
+the `iperf3` executable to be pinned to a CPU. The CPU Mask is calculated outside of Flow-Test
+and simply passed in and set by the script. Example:
+
+```
+FT_CLIENT_CPU_MASK=0x100 TEST_CASE=1 HWOL=true CURL=false ./test.sh
+```
+
 ### ovnkube-trace
 
 `ovnkube-trace` is a tool in upstream OVN-Kubernetes to trace packet simulations
@@ -745,7 +991,7 @@ Test scripts have been setup to run in a Multi-Cluster environment. It has only 
 with [Submariner](https://github.com/submariner-io) and the clusters themselves need to already
 be running. For Multi-Cluster, Flow-Tester is deployed in one of two modes:
 * `Full Mode:` Normal deployment of Flow-Tester pods and services and all the Flow-Tester
-  Services are exported.  
+  Services are exported.
 * `Client-Only Mode:` Only Client Pods are created, no Server Pods or Services.
 
 For Multi-Cluster, the following scripts have been added:
@@ -877,7 +1123,7 @@ combination of paths are tested:
 * PATH 07: B-C -- C-B
 * PATH 08: B-C -- C-A
 
-Once all the Paths have been tested, all the routes are restored and the script finds the next set of 
+Once all the Paths have been tested, all the routes are restored and the script finds the next set of
 clusters to test.
 
 To test all combinations (which is the default), use:
