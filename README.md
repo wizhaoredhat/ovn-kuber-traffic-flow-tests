@@ -675,7 +675,6 @@ drwxrwxr-x. 7 user user 4096 Jun 11 15:04 ..
 -rw-rw-r--. 1 user user   42 Jun 10 16:52 14-b-external2clusterIpSvc-hostBackend.txt
 -rw-rw-r--. 1 user user   42 Jun 10 16:52 15-a-external2nodePortSvc-podBackend.txt
 -rw-rw-r--. 1 user user   42 Jun 10 16:53 15-b-external2nodePortSvc-hostBackend.txt
--rw-rw-r--. 1 user user   71 Jun  9 13:51 .gitignore
 ```
 
 *NOTE:* The *'cleanup.sh'* script does not remove these files and each subsequent run of
@@ -707,188 +706,146 @@ FLOW 01: Pod to Pod traffic
 *** 1-a: Pod to Pod (Same Node) ***
 
 admin:worker-advnetlab23 -> admin:worker-advnetlab23
-kubectl exec -it -n default ft-client-pod-sriov-f2c7t -- curl -m 5 "http://10.131.0.36:8080/etc/httpserver/"
+kubectl exec -it -n default ft-client-pod-sriov-wjd55 -- curl -m 5 "http://10.131.1.181:8080/etc/httpserver/"
 SUCCESS
 
-kubectl get pods -n default --selector=name=ft-tools -o wide | grep -w "worker-advnetlab23" | awk -F' ' '{print }'
-kubectl get pods -n default --selector=name=ft-tools -o wide | grep -w "worker-advnetlab23" | awk -F' ' '{print }'
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "chroot /host /bin/bash -c "crictl ps -a --name=ft-iperf-server-pod-v4 -o json | jq -r ".containers[].podSandboxId"""
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "chroot /host /bin/bash -c "crictl ps -a --name=ft-client-pod -o json | jq -r ".containers[].podSandboxId"""
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "chroot /host /bin/bash -c "crictl ps -a --name=ft-client-pod -o json | jq -r ".containers[].podSandboxId"""
-Variables Used For Hardware Offload Validation:
-================================================
-  TOOLS_CLIENT_POD=ft-tools-5dhvc
-  TOOLS_SERVER_POD=ft-tools-5dhvc
-  TEST_SERVER_IPERF_SERVER_PODID=32b85d25dbab278bb7fdb78aab9915a39716a09ef82b73fb97f823b9d26cba5f
-  TEST_SERVER_CLIENT_PODID=4974dd867bd1648445147f8a11f134530a6e5e4cad6b446ec8b942109939e8fa
-  TEST_CLIENT_CLIENT_PODID=4974dd867bd1648445147f8a11f134530a6e5e4cad6b446ec8b942109939e8fa
-  TEST_SERVER_IPERF_SERVER_VF_REP=32b85d25dbab278
-  TEST_SERVER_CLIENT_VF_REP=4974dd867bd1648
-  TEST_CLIENT_CLIENT_VF_REP=4974dd867bd1648
-================================================
 admin:worker-advnetlab23 -> admin:worker-advnetlab23
-kubectl exec -it -n default ft-client-pod-sriov-f2c7t --  iperf3 -c 10.131.0.37 -p 5201 -t 40
-Unable to use a TTY - input is not a terminal or the right kind of file
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 4974dd867bd1648 | sed -n 's/^\s\+//p'"
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "timeout --preserve-status 25 tcpdump -i 4974dd867bd1648 -n not arp"
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 4974dd867bd1648 | sed -n 's/^\s\+//p'"
-Ethtool results for 4974dd867bd1648:
-=================================================
-RX Packets: 268556635 - 268556635 = 0
-TX Packets: 5570833 - 5570833 = 0
-Summary Tcpdump Output (see hwol-logs/01-a-pod2pod-sameNode.txt for full detail):
+Client Pod on Client Host VF Representor Results:
+kubectl exec -n default ft-client-pod-sriov-wjd55 --  iperf3 -c 10.131.1.182 -p 5201 -t 40
+kubectl exec -n "default" "ft-tools-zzng4" -- /bin/sh -c "ethtool -S 484b25b14e775b5 | sed -n 's/^\s\+//p'"
+kubectl exec -n "default" "ft-tools-zzng4" -- /bin/sh -c "timeout --preserve-status 25 tcpdump -v -i 484b25b14e775b5 -n not arp"
+Summary (see hwol-logs/01-a-pod2pod-sameNode.txt for full detail):
+Summary Ethtool results for 484b25b14e775b5:
+RX Packets: 2075936 - 2075936 = 0
+TX Packets: 94035845 - 94035845 = 0
+Summary Tcpdump Output:
 dropped privs to tcpdump
-tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
-listening on 4974dd867bd1648, link-type EN10MB (Ethernet), snapshot length 262144 bytes
-
+tcpdump: listening on 484b25b14e775b5, link-type EN10MB (Ethernet), snapshot length 262144 bytes
 0 packets captured
 0 packets received by filter
 0 packets dropped by kernel
-Summary Iperf Output (see hwol-logs/01-a-pod2pod-sameNode.txt for full detail):
+
+Summary Iperf Output:
 [ ID] Interval           Transfer     Bitrate         Retr
-[  5]   0.00-40.00  sec   128 GBytes  27.4 Gbits/sec  18067             sender
-[  5]   0.00-40.00  sec   128 GBytes  27.4 Gbits/sec                  receiver
+[  5]   0.00-40.00  sec   126 GBytes  27.1 Gbits/sec  16426             sender
+[  5]   0.00-40.00  sec   126 GBytes  27.1 Gbits/sec                  receiver
 
-admin:worker-advnetlab23 -> admin:worker-advnetlab23
-kubectl exec -it -n default ft-client-pod-sriov-f2c7t --  iperf3 -c 10.131.0.37 -p 5201 -t 40
-Unable to use a TTY - input is not a terminal or the right kind of file
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 4974dd867bd1648 | sed -n 's/^\s\+//p'"
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "timeout --preserve-status 25 tcpdump -i 4974dd867bd1648 -n not arp"
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 4974dd867bd1648 | sed -n 's/^\s\+//p'"
-Ethtool results for 4974dd867bd1648:
-=================================================
-RX Packets: 268556818 - 268556818 = 0
-TX Packets: 5570870 - 5570870 = 0
-Summary Tcpdump Output (see hwol-logs/01-a-pod2pod-sameNode.txt for full detail):
+Client Pod on Server Host VF Representor Results:
+kubectl exec -n default ft-client-pod-sriov-wjd55 --  iperf3 -c 10.131.1.182 -p 5201 -t 40
+kubectl exec -n "default" "ft-tools-zzng4" -- /bin/sh -c "ethtool -S 484b25b14e775b5 | sed -n 's/^\s\+//p'"
+kubectl exec -n "default" "ft-tools-zzng4" -- /bin/sh -c "timeout --preserve-status 25 tcpdump -v -i 484b25b14e775b5 -n not arp"
+Summary (see hwol-logs/01-a-pod2pod-sameNode.txt for full detail):
+Summary Ethtool results for 484b25b14e775b5:
+RX Packets: 2075946 - 2075946 = 0
+TX Packets: 94035852 - 94035852 = 0
+Summary Tcpdump Output:
 dropped privs to tcpdump
-tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
-listening on 4974dd867bd1648, link-type EN10MB (Ethernet), snapshot length 262144 bytes
-
+tcpdump: listening on 484b25b14e775b5, link-type EN10MB (Ethernet), snapshot length 262144 bytes
 0 packets captured
 0 packets received by filter
 0 packets dropped by kernel
-Summary Iperf Output (see hwol-logs/01-a-pod2pod-sameNode.txt for full detail):
-[ ID] Interval           Transfer     Bitrate         Retr
-[  5]   0.00-40.00  sec   118 GBytes  25.4 Gbits/sec  18167             sender
-[  5]   0.00-40.00  sec   118 GBytes  25.4 Gbits/sec                  receiver
-admin:worker-advnetlab23 -> admin:worker-advnetlab23
-kubectl exec -it -n default ft-client-pod-sriov-f2c7t --  iperf3 -c 10.131.0.37 -p 5201 -t 40
-Unable to use a TTY - input is not a terminal or the right kind of file
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 32b85d25dbab278 | sed -n 's/^\s\+//p'"
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "timeout --preserve-status 25 tcpdump -i 32b85d25dbab278 -n not arp"
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 32b85d25dbab278 | sed -n 's/^\s\+//p'"
-Ethtool results for 4974dd867bd1648:
-=================================================
-RX Packets: 9405785 - 9405785 = 0
-TX Packets: 468017326 - 468017326 = 0
-Summary Tcpdump Output (see hwol-logs/01-a-pod2pod-sameNode.txt for full detail):
-dropped privs to tcpdump
-tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
-listening on 32b85d25dbab278, link-type EN10MB (Ethernet), snapshot length 262144 bytes
 
+Summary Iperf Output:
+[ ID] Interval           Transfer     Bitrate         Retr
+[  5]   0.00-40.00  sec   128 GBytes  27.5 Gbits/sec  21006             sender
+[  5]   0.00-40.00  sec   128 GBytes  27.5 Gbits/sec                  receiver
+
+Server Pod on Server Host VF Representor Results:
+kubectl exec -n default ft-client-pod-sriov-wjd55 --  iperf3 -c 10.131.1.182 -p 5201 -t 40
+kubectl exec -n "default" "ft-tools-zzng4" -- /bin/sh -c "ethtool -S 88551af96a47310 | sed -n 's/^\s\+//p'"
+kubectl exec -n "default" "ft-tools-zzng4" -- /bin/sh -c "timeout --preserve-status 25 tcpdump -v -i 88551af96a47310 -n not arp"
+Summary (see hwol-logs/01-a-pod2pod-sameNode.txt for full detail):
+Summary Ethtool results for 484b25b14e775b5:
+RX Packets: 6566 - 6566 = 0
+TX Packets: 57438 - 57438 = 0
+Summary Tcpdump Output:
+dropped privs to tcpdump
+tcpdump: listening on 88551af96a47310, link-type EN10MB (Ethernet), snapshot length 262144 bytes
 0 packets captured
 0 packets received by filter
 0 packets dropped by kernel
-Summary Iperf Output (see hwol-logs/01-a-pod2pod-sameNode.txt for full detail):
+
+Summary Iperf Output:
 [ ID] Interval           Transfer     Bitrate         Retr
-[  5]   0.00-40.00  sec   122 GBytes  26.3 Gbits/sec  13261             sender
-[  5]   0.00-40.00  sec   122 GBytes  26.3 Gbits/sec                  receiver
+[  5]   0.00-40.00  sec   123 GBytes  26.4 Gbits/sec  13945             sender
+[  5]   0.00-40.00  sec   123 GBytes  26.4 Gbits/sec                  receiver
 SUCCESS
+
 
 *** 1-b: Pod to Pod (Different Node) ***
 
 admin:worker-advnetlab24 -> admin:worker-advnetlab23
-kubectl exec -it -n default ft-client-pod-sriov-vn629 -- curl -m 5 "http://10.131.0.36:8080/etc/httpserver/"
+kubectl exec -it -n default ft-client-pod-sriov-fd8d7 -- curl -m 5 "http://10.131.1.181:8080/etc/httpserver/"
 SUCCESS
 
-kubectl get pods -n default --selector=name=ft-tools -o wide | grep -w "worker-advnetlab24" | awk -F' ' '{print }'
-kubectl get pods -n default --selector=name=ft-tools -o wide | grep -w "worker-advnetlab23" | awk -F' ' '{print }'
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "chroot /host /bin/bash -c "crictl ps -a --name=ft-iperf-server-pod-v4 -o json | jq -r ".containers[].podSandboxId"""
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "chroot /host /bin/bash -c "crictl ps -a --name=ft-client-pod -o json | jq -r ".containers[].podSandboxId"""
-kubectl exec -it -n "default" "ft-tools-49dr6" -- /bin/sh -c "chroot /host /bin/bash -c "crictl ps -a --name=ft-client-pod -o json | jq -r ".containers[].podSandboxId"""
-Variables Used For Hardware Offload Validation:
-================================================
-  TOOLS_CLIENT_POD=ft-tools-49dr6
-  TOOLS_SERVER_POD=ft-tools-5dhvc
-  TEST_SERVER_IPERF_SERVER_PODID=32b85d25dbab278bb7fdb78aab9915a39716a09ef82b73fb97f823b9d26cba5f
-  TEST_SERVER_CLIENT_PODID=4974dd867bd1648445147f8a11f134530a6e5e4cad6b446ec8b942109939e8fa
-  TEST_CLIENT_CLIENT_PODID=66137d1fda0868422164c88fadac9aeb6ebdfb1e3f45d33c31ff356d8c693562
-  TEST_SERVER_IPERF_SERVER_VF_REP=32b85d25dbab278
-  TEST_SERVER_CLIENT_VF_REP=4974dd867bd1648
-  TEST_CLIENT_CLIENT_VF_REP=66137d1fda08684
-================================================
 admin:worker-advnetlab24 -> admin:worker-advnetlab23
-kubectl exec -it -n default ft-client-pod-sriov-vn629 --  iperf3 -c 10.131.0.37 -p 5201 -t 40
-Unable to use a TTY - input is not a terminal or the right kind of file
-kubectl exec -it -n "default" "ft-tools-49dr6" -- /bin/sh -c "ethtool -S 66137d1fda08684 | sed -n 's/^\s\+//p'"
-kubectl exec -it -n "default" "ft-tools-49dr6" -- /bin/sh -c "timeout --preserve-status 25 tcpdump -i 66137d1fda08684 -n not arp"
-kubectl exec -it -n "default" "ft-tools-49dr6" -- /bin/sh -c "ethtool -S 66137d1fda08684 | sed -n 's/^\s\+//p'"
-Ethtool results for 66137d1fda08684:
-=================================================
-RX Packets: 61154401 - 61154401 = 0
-TX Packets: 2734449 - 2734449 = 0
-Summary Tcpdump Output (see hwol-logs/01-b-pod2pod-diffNode.txt for full detail):
+Client Pod on Client Host VF Representor Results:
+kubectl exec -n default ft-client-pod-sriov-fd8d7 --  iperf3 -c 10.131.1.182 -p 5201 -t 40
+kubectl exec -n "default" "ft-tools-6vvm8" -- /bin/sh -c "ethtool -S bafedd2223c4911 | sed -n 's/^\s\+//p'"
+kubectl exec -n "default" "ft-tools-6vvm8" -- /bin/sh -c "timeout --preserve-status 25 tcpdump -v -i bafedd2223c4911 -n not arp"
+Summary (see hwol-logs/01-b-pod2pod-diffNode.txt for full detail):
+Summary Ethtool results for bafedd2223c4911:
+RX Packets: 14503 - 14503 = 0
+TX Packets: 1274 - 1274 = 0
+Summary Tcpdump Output:
 dropped privs to tcpdump
-tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
-listening on 66137d1fda08684, link-type EN10MB (Ethernet), snapshot length 262144 bytes
-
+tcpdump: listening on bafedd2223c4911, link-type EN10MB (Ethernet), snapshot length 262144 bytes
 0 packets captured
 0 packets received by filter
 0 packets dropped by kernel
-Summary Iperf Output (see hwol-logs/01-b-pod2pod-diffNode.txt for full detail):
-[ ID] Interval           Transfer     Bitrate         Retr
-[  5]   0.00-40.00  sec   132 GBytes  28.4 Gbits/sec  21117             sender
-[  5]   0.00-40.00  sec   132 GBytes  28.4 Gbits/sec                  receiver
-admin:worker-advnetlab24 -> admin:worker-advnetlab23
-kubectl exec -it -n default ft-client-pod-sriov-vn629 --  iperf3 -c 10.131.0.37 -p 5201 -t 40
-Unable to use a TTY - input is not a terminal or the right kind of file
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 4974dd867bd1648 | sed -n 's/^\s\+//p'"
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "timeout --preserve-status 25 tcpdump -i 4974dd867bd1648 -n not arp"
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 4974dd867bd1648 | sed -n 's/^\s\+//p'"
-Ethtool results for 66137d1fda08684:
-=================================================
-RX Packets: 268556885 - 268556885 = 0
-TX Packets: 5570931 - 5570931 = 0
-Summary Tcpdump Output (see hwol-logs/01-b-pod2pod-diffNode.txt for full detail):
-dropped privs to tcpdump
-tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
-listening on 4974dd867bd1648, link-type EN10MB (Ethernet), snapshot length 262144 bytes
 
+Summary Iperf Output:
+[ ID] Interval           Transfer     Bitrate         Retr
+[  5]   0.00-40.00  sec   135 GBytes  28.9 Gbits/sec  28897             sender
+[  5]   0.00-40.00  sec   135 GBytes  28.9 Gbits/sec                  receiver
+
+Client Pod on Server Host VF Representor Results:
+kubectl exec -n default ft-client-pod-sriov-fd8d7 --  iperf3 -c 10.131.1.182 -p 5201 -t 40
+kubectl exec -n "default" "ft-tools-zzng4" -- /bin/sh -c "ethtool -S 484b25b14e775b5 | sed -n 's/^\s\+//p'"
+kubectl exec -n "default" "ft-tools-zzng4" -- /bin/sh -c "timeout --preserve-status 25 tcpdump -v -i 484b25b14e775b5 -n not arp"
+Summary (see hwol-logs/01-b-pod2pod-diffNode.txt for full detail):
+Summary Ethtool results for bafedd2223c4911:
+RX Packets: 2076583 - 2076583 = 0
+TX Packets: 94035986 - 94035986 = 0
+Summary Tcpdump Output:
+dropped privs to tcpdump
+tcpdump: listening on 484b25b14e775b5, link-type EN10MB (Ethernet), snapshot length 262144 bytes
 0 packets captured
 0 packets received by filter
 0 packets dropped by kernel
-Summary Iperf Output (see hwol-logs/01-b-pod2pod-diffNode.txt for full detail):
-[ ID] Interval           Transfer     Bitrate         Retr
-[  5]   0.00-40.00  sec   133 GBytes  28.6 Gbits/sec  26052             sender
-[  5]   0.00-40.00  sec   133 GBytes  28.6 Gbits/sec                  receiver
-admin:worker-advnetlab24 -> admin:worker-advnetlab23
-kubectl exec -it -n default ft-client-pod-sriov-vn629 --  iperf3 -c 10.131.0.37 -p 5201 -t 40
-Unable to use a TTY - input is not a terminal or the right kind of file
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 32b85d25dbab278 | sed -n 's/^\s\+//p'"
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "timeout --preserve-status 25 tcpdump -i 32b85d25dbab278 -n not arp"
-kubectl exec -it -n "default" "ft-tools-5dhvc" -- /bin/sh -c "ethtool -S 32b85d25dbab278 | sed -n 's/^\s\+//p'"
-Ethtool results for 66137d1fda08684:
-=================================================
-RX Packets: 9406025 - 9406025 = 0
-TX Packets: 468018983 - 468018983 = 0
-Summary Tcpdump Output (see hwol-logs/01-b-pod2pod-diffNode.txt for full detail):
-dropped privs to tcpdump
-tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
-listening on 32b85d25dbab278, link-type EN10MB (Ethernet), snapshot length 262144 bytes
 
+Summary Iperf Output:
+[ ID] Interval           Transfer     Bitrate         Retr
+[  5]   0.00-40.00  sec   132 GBytes  28.3 Gbits/sec  23378             sender
+[  5]   0.00-40.00  sec   132 GBytes  28.3 Gbits/sec                  receiver
+
+Server Pod on Server Host VF Representor Results:
+kubectl exec -n default ft-client-pod-sriov-fd8d7 --  iperf3 -c 10.131.1.182 -p 5201 -t 40
+kubectl exec -n "default" "ft-tools-zzng4" -- /bin/sh -c "ethtool -S 88551af96a47310 | sed -n 's/^\s\+//p'"
+kubectl exec -n "default" "ft-tools-zzng4" -- /bin/sh -c "timeout --preserve-status 25 tcpdump -v -i 88551af96a47310 -n not arp"
+Summary (see hwol-logs/01-b-pod2pod-diffNode.txt for full detail):
+Summary Ethtool results for bafedd2223c4911:
+RX Packets: 6872 - 6872 = 0
+TX Packets: 58779 - 58779 = 0
+Summary Tcpdump Output:
+dropped privs to tcpdump
+tcpdump: listening on 88551af96a47310, link-type EN10MB (Ethernet), snapshot length 262144 bytes
 0 packets captured
 0 packets received by filter
 0 packets dropped by kernel
-Summary Iperf Output (see hwol-logs/01-b-pod2pod-diffNode.txt for full detail):
+
+Summary Iperf Output:
 [ ID] Interval           Transfer     Bitrate         Retr
-[  5]   0.00-40.00  sec   131 GBytes  28.2 Gbits/sec  18876             sender
-[  5]   0.00-40.00  sec   131 GBytes  28.2 Gbits/sec                  receiver
+[  5]   0.00-40.00  sec   129 GBytes  27.7 Gbits/sec  23669             sender
+[  5]   0.00-40.00  sec   129 GBytes  27.7 Gbits/sec                  receiver
 SUCCESS
 ```
 
 When Hardware Offload Validation is run on each sub-flow, the full output of the command
-is piped to files in the `hwol-logs/` directory. Use `VERBOSE=true` to when command is
-executed to see full output command is run. Below is a list of sample output files:
+is piped to files in the `hwol-logs/` directory. Use `FT_DEBUG=true` to see all commands
+that were used to determine the VF representor and other parameters. Use `VERBOSE=true` to
+when command is executed to see full output command is run. Below is a list of sample output
+files:
 
 ```
 $ ls -al hwol-logs
@@ -969,7 +926,6 @@ drwxrwxr-x. 7 user user  4096 Jun 11 15:04 ..
 -rw-rw-r--. 1 user user    19 Jun 10 16:52 14-b-external2clusterIpSvc-hostBackend.txt
 -rw-rw-r--. 1 user user    19 Jun 10 16:52 15-a-external2nodePortSvc-podBackend.txt
 -rw-rw-r--. 1 user user    19 Jun 10 16:53 15-b-external2nodePortSvc-hostBackend.txt
--rw-rw-r--. 1 user user    70 Apr 16 10:09 .gitignore
 ```
 
 Examine these files to debug why a particular flow isn't working or to better understand

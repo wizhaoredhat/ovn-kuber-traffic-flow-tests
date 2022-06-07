@@ -118,19 +118,17 @@ process-vf-rep-stats() {
     TASKSET_CMD="taskset ${FT_CLIENT_CPU_MASK} "
   fi
 
-  echo "${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE}"
-
   # Start IPERF in background
-  echo "kubectl exec -it -n ${FT_NAMESPACE} ${TEST_CLIENT_POD} -- ${TASKSET_CMD} ${IPERF_CMD} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_RUNTIME}"
-  kubectl exec -it -n "${FT_NAMESPACE}" "$TEST_CLIENT_POD" -- /bin/sh -c "${TASKSET_CMD} ${IPERF_CMD} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_RUNTIME}" > "${IPERF_FILENAME}" &
+  echo "kubectl exec -n ${FT_NAMESPACE} ${TEST_CLIENT_POD} -- ${TASKSET_CMD} ${IPERF_CMD} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_RUNTIME}"
+  kubectl exec -n "${FT_NAMESPACE}" "$TEST_CLIENT_POD" -- /bin/sh -c "${TASKSET_CMD} ${IPERF_CMD} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_RUNTIME}" > "${IPERF_FILENAME}" &
   IPERF_PID=$!
 
   # Wait to learn flows and hardware offload
   sleep "${FLOW_LEARNING_TIME}"
 
   # Record ethtool stats
-  echo "kubectl exec -it -n \"${FT_NAMESPACE}\" \"${TEST_TOOLS_POD}\" -- /bin/sh -c \"ethtool -S ${TEST_VF_REP} | sed -n 's/^\s\+//p'\""
-  ethtoolstart=$(kubectl exec -it -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "ethtool -S ${TEST_VF_REP} | sed -n 's/^\s\+//p'")
+  echo "kubectl exec -n \"${FT_NAMESPACE}\" \"${TEST_TOOLS_POD}\" -- /bin/sh -c \"ethtool -S ${TEST_VF_REP} | sed -n 's/^\s\+//p'\""
+  ethtoolstart=$(kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "ethtool -S ${TEST_VF_REP} | sed -n 's/^\s\+//p'")
   echo "${ethtoolstart}" >> "${HWOL_VALIDATION_FILENAME}"
 
   # Record RX/TX packet counts
@@ -138,13 +136,16 @@ process-vf-rep-stats() {
   txpktstart=$(echo "$ethtoolstart" | sed -n "s/^tx_packets:\s\+//p" | sed "s/[^0-9]//g")
 
   # Start tcpdump
-  echo "kubectl exec -it -n \"${FT_NAMESPACE}\" \"${TEST_TOOLS_POD}\" -- /bin/sh -c \"timeout --preserve-status ${TCPDUMP_RUNTIME} tcpdump -i ${TEST_VF_REP} -n not arp\""
-  kubectl exec -it -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "timeout --preserve-status ${TCPDUMP_RUNTIME} tcpdump -i ${TEST_VF_REP} -n not arp" > "${TCPDUMP_FILENAME}"
+  echo "kubectl exec -n \"${FT_NAMESPACE}\" \"${TEST_TOOLS_POD}\" -- /bin/sh -c \"timeout --preserve-status ${TCPDUMP_RUNTIME} tcpdump -v -i ${TEST_VF_REP} -n not arp\""
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "timeout --preserve-status ${TCPDUMP_RUNTIME} tcpdump -v -i ${TEST_VF_REP} -n not arp" > "${TCPDUMP_FILENAME}" 2>&1
   cat "${TCPDUMP_FILENAME}" >> "${HWOL_VALIDATION_FILENAME}"
 
   # Record ethtool stats
-  echo "kubectl exec -it -n \"${FT_NAMESPACE}\" \"${TEST_TOOLS_POD}\" -- /bin/sh -c \"ethtool -S ${TEST_VF_REP} | sed -n 's/^\s\+//p'\""
-  ethtoolend=$(kubectl exec -it -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "ethtool -S ${TEST_VF_REP} | sed -n 's/^\s\+//p'")
+  # This records the ethtool stats before Iperf finishes because at the end of Iperf
+  # the TCP connection will close. There are packets when the TCP connection closes
+  # that won't be hardware offloaded.
+  [ "$FT_DEBUG" == true ] &&  echo "kubectl exec -n \"${FT_NAMESPACE}\" \"${TEST_TOOLS_POD}\" -- /bin/sh -c \"ethtool -S ${TEST_VF_REP} | sed -n 's/^\s\+//p'\""
+  ethtoolend=$(kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "ethtool -S ${TEST_VF_REP} | sed -n 's/^\s\+//p'")
   echo "${ethtoolend}" >> "${HWOL_VALIDATION_FILENAME}"
 
   rxpktend=$(echo "$ethtoolend" | sed -n "s/^rx_packets:\s\+//p" | sed "s/[^0-9]//g")
@@ -153,8 +154,8 @@ process-vf-rep-stats() {
   rxcount=$(( rxpktend - rxpktstart ))
   txcount=$(( txpktend - txpktstart ))
 
-  echo "Ethtool results for ${TEST_CLIENT_CLIENT_VF_REP}:"
-  echo "================================================="
+  echo "Summary (see ${HWOL_VALIDATION_FILENAME} for full detail):"
+  echo "Summary Ethtool results for ${TEST_CLIENT_CLIENT_VF_REP}:"
   echo "RX Packets: ${rxpktend} - ${rxpktstart} = ${rxcount}"
   echo "TX Packets: ${txpktend} - ${txpktstart} = ${txcount}"
 
@@ -166,14 +167,14 @@ process-vf-rep-stats() {
 
   # Dump command output
   if [ "$VERBOSE" == true ]; then
-    echo "Full Tcpdump Output (from ${HWOL_VALIDATION_FILENAME}):"
+    echo "Full Tcpdump Output:"
     cat ${TCPDUMP_FILENAME}
-    echo "Full Iperf Output (from ${HWOL_VALIDATION_FILENAME}):"
+    echo "Full Iperf Output:"
     cat ${IPERF_FILENAME}
   else
-    echo "Summary Tcpdump Output (see ${HWOL_VALIDATION_FILENAME} for full detail):"
+    echo "Summary Tcpdump Output:"
     tail ${TCPDUMP_FILENAME}
-    echo "Summary Iperf Output (see ${HWOL_VALIDATION_FILENAME} for full detail):"
+    echo "Summary Iperf Output:"
     cat ${IPERF_FILENAME} | grep -B 1 -A 1 "sender"
   fi
 
@@ -201,47 +202,55 @@ process-hw-offload-validation() {
 
   HWOL_VALIDATION_FILENAME="${HW_OFFLOAD_LOGS_DIR}/${TEST_FILENAME}"
 
-  echo "kubectl get pods -n ${FT_NAMESPACE} --selector=name=${TOOLS_POD_NAME} -o wide | grep -w \"${TEST_CLIENT_NODE}\" | awk -F' ' '{print $1}'"
-  TOOLS_CLIENT_POD=$(kubectl get pods -n ${FT_NAMESPACE} --selector=name=${TOOLS_POD_NAME} -o wide | grep -w "${TEST_CLIENT_NODE}" | awk -F' ' '{print $1}')
-  echo "kubectl get pods -n ${FT_NAMESPACE} --selector=name=${TOOLS_POD_NAME} -o wide | grep -w \"${TEST_SERVER_NODE}\" | awk -F' ' '{print $1}'"
-  TOOLS_SERVER_POD=$(kubectl get pods -n ${FT_NAMESPACE} --selector=name=${TOOLS_POD_NAME} -o wide | grep -w "${TEST_SERVER_NODE}" | awk -F' ' '{print $1}')
+  [ "$FT_DEBUG" == true ] && echo "kubectl get pods -n ${FT_NAMESPACE} --selector=name=${TOOLS_POD_NAME} -o wide"
+  TMP_OUTPUT=$(kubectl get pods -n ${FT_NAMESPACE} --selector=name=${TOOLS_POD_NAME} -o wide)
+  TOOLS_CLIENT_POD=$(echo "${TMP_OUTPUT}" | grep -w "${TEST_CLIENT_NODE}" | awk -F' ' '{print $1}')
+  TOOLS_SERVER_POD=$(echo "${TMP_OUTPUT}" | grep -w "${TEST_SERVER_NODE}" | awk -F' ' '{print $1}')
 
-  echo "kubectl exec -it -n \"${FT_NAMESPACE}\" \"${TOOLS_SERVER_POD}\" -- /bin/sh -c \"chroot /host /bin/bash -c \"crictl ps -a --name=${IPERF_SERVER_POD_NAME} -o json | jq -r \".containers[].podSandboxId\"\"\""
-  TEST_SERVER_IPERF_SERVER_PODID=`kubectl exec -it -n "${FT_NAMESPACE}" "${TOOLS_SERVER_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"crictl ps -a --name=${IPERF_SERVER_POD_NAME} -o json | jq -r \".containers[].podSandboxId\"\""`
-  echo "kubectl exec -it -n \"${FT_NAMESPACE}\" \"${TOOLS_SERVER_POD}\" -- /bin/sh -c \"chroot /host /bin/bash -c \"crictl ps -a --name=${CLIENT_POD_NAME_PREFIX} -o json | jq -r \".containers[].podSandboxId\"\"\""
-  TEST_SERVER_CLIENT_PODID=`kubectl exec -it -n "${FT_NAMESPACE}" "${TOOLS_SERVER_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"crictl ps -a --name=${CLIENT_POD_NAME_PREFIX} -o json | jq -r \".containers[].podSandboxId\"\""`
-  echo "kubectl exec -it -n \"${FT_NAMESPACE}\" \"${TOOLS_CLIENT_POD}\" -- /bin/sh -c \"chroot /host /bin/bash -c \"crictl ps -a --name=${CLIENT_POD_NAME_PREFIX} -o json | jq -r \".containers[].podSandboxId\"\"\""
-  TEST_CLIENT_CLIENT_PODID=`kubectl exec -it -n "${FT_NAMESPACE}" "${TOOLS_CLIENT_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"crictl ps -a --name=${CLIENT_POD_NAME_PREFIX} -o json | jq -r \".containers[].podSandboxId\"\""`
+  [ "$FT_DEBUG" == true ] && echo "kubectl exec -n \"${FT_NAMESPACE}\" \"${TOOLS_SERVER_POD}\" -- /bin/sh -c \"chroot /host /bin/bash -c \"crictl ps -a --name=${IPERF_SERVER_POD_NAME} -o json | jq -r \".containers[].podSandboxId\"\"\""
+  TEST_SERVER_IPERF_SERVER_PODID=`kubectl exec -n "${FT_NAMESPACE}" "${TOOLS_SERVER_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"crictl ps -a --name=${IPERF_SERVER_POD_NAME} -o json | jq -r \".containers[].podSandboxId\"\""`
+  [ "$FT_DEBUG" == true ] && echo "kubectl exec -n \"${FT_NAMESPACE}\" \"${TOOLS_SERVER_POD}\" -- /bin/sh -c \"chroot /host /bin/bash -c \"crictl ps -a --name=${CLIENT_POD_NAME_PREFIX} -o json | jq -r \".containers[].podSandboxId\"\"\""
+  TEST_SERVER_CLIENT_PODID=`kubectl exec -n "${FT_NAMESPACE}" "${TOOLS_SERVER_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"crictl ps -a --name=${CLIENT_POD_NAME_PREFIX} -o json | jq -r \".containers[].podSandboxId\"\""`
+  [ "$FT_DEBUG" == true ] && echo "kubectl exec -n \"${FT_NAMESPACE}\" \"${TOOLS_CLIENT_POD}\" -- /bin/sh -c \"chroot /host /bin/bash -c \"crictl ps -a --name=${CLIENT_POD_NAME_PREFIX} -o json | jq -r \".containers[].podSandboxId\"\"\""
+  TEST_CLIENT_CLIENT_PODID=`kubectl exec -n "${FT_NAMESPACE}" "${TOOLS_CLIENT_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"crictl ps -a --name=${CLIENT_POD_NAME_PREFIX} -o json | jq -r \".containers[].podSandboxId\"\""`
 
   TEST_SERVER_IPERF_SERVER_VF_REP=${TEST_SERVER_IPERF_SERVER_PODID::15}
   TEST_SERVER_CLIENT_VF_REP=${TEST_SERVER_CLIENT_PODID::15}
   TEST_CLIENT_CLIENT_VF_REP=${TEST_CLIENT_CLIENT_PODID::15}
 
-  echo "Variables Used For Hardware Offload Validation:"
-  echo "================================================"
-  echo "  TOOLS_CLIENT_POD=${TOOLS_CLIENT_POD}"
-  echo "  TOOLS_SERVER_POD=${TOOLS_SERVER_POD}"
-  echo "  TEST_SERVER_IPERF_SERVER_PODID=${TEST_SERVER_IPERF_SERVER_PODID}"
-  echo "  TEST_SERVER_CLIENT_PODID=${TEST_SERVER_CLIENT_PODID}"
-  echo "  TEST_CLIENT_CLIENT_PODID=${TEST_CLIENT_CLIENT_PODID}"
-  echo "  TEST_SERVER_IPERF_SERVER_VF_REP=${TEST_SERVER_IPERF_SERVER_VF_REP}"
-  echo "  TEST_SERVER_CLIENT_VF_REP=${TEST_SERVER_CLIENT_VF_REP}"
-  echo "  TEST_CLIENT_CLIENT_VF_REP=${TEST_CLIENT_CLIENT_VF_REP}"
-  echo "================================================"
+  if [ "$FT_DEBUG" == true ]; then
+    echo "Variables Used For Hardware Offload Validation:"
+    echo "================================================"
+    echo "  TOOLS_CLIENT_POD=${TOOLS_CLIENT_POD}"
+    echo "  TOOLS_SERVER_POD=${TOOLS_SERVER_POD}"
+    echo "  TEST_SERVER_IPERF_SERVER_PODID=${TEST_SERVER_IPERF_SERVER_PODID}"
+    echo "  TEST_SERVER_CLIENT_PODID=${TEST_SERVER_CLIENT_PODID}"
+    echo "  TEST_CLIENT_CLIENT_PODID=${TEST_CLIENT_CLIENT_PODID}"
+    echo "  TEST_SERVER_IPERF_SERVER_VF_REP=${TEST_SERVER_IPERF_SERVER_VF_REP}"
+    echo "  TEST_SERVER_CLIENT_VF_REP=${TEST_SERVER_CLIENT_VF_REP}"
+    echo "  TEST_CLIENT_CLIENT_VF_REP=${TEST_CLIENT_CLIENT_VF_REP}"
+    echo "================================================"
+  fi
 
+  echo "${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE}"
   echo "Client Pod on Client Host VF Representor Results:" > "${HWOL_VALIDATION_FILENAME}"
+  echo "Client Pod on Client Host VF Representor Results:"
   TEST_TOOLS_POD=$TOOLS_CLIENT_POD
   TEST_VF_REP=$TEST_CLIENT_CLIENT_VF_REP
   process-vf-rep-stats
   vfRes1=$?
 
   echo "Client Pod on Server Host VF Representor Results:" >> "${HWOL_VALIDATION_FILENAME}"
+  echo
+  echo "Client Pod on Server Host VF Representor Results:"
   TEST_TOOLS_POD=$TOOLS_SERVER_POD
   TEST_VF_REP=$TEST_SERVER_CLIENT_VF_REP
   process-vf-rep-stats
   vfRes2=$?
 
   echo "Server Pod on Server Host VF Representor Results:" >> "${HWOL_VALIDATION_FILENAME}"
+  echo
+  echo "Server Pod on Server Host VF Representor Results:"
   TEST_TOOLS_POD=$TOOLS_SERVER_POD
   TEST_VF_REP=$TEST_SERVER_IPERF_SERVER_VF_REP
   process-vf-rep-stats

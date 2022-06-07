@@ -19,7 +19,7 @@ spec:
       hostNetwork: true
       containers:
       - name: ft-tools
-        image:  quay.io/wizhao/ft-tools:0.9-x86_64
+        image: quay.io/wizhao/ft-tools:0.9
         command:
           - /sbin/init
         imagePullPolicy: IfNotPresent
@@ -34,5 +34,13 @@ spec:
           path: /
           type: Directory
         name: host
-      nodeSelector:
-        ft.ClientPod: sriov
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: ft.ClientPod
+                operator: In
+                values:
+                - sriov
+                - client
