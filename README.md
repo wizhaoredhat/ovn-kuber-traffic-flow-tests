@@ -309,7 +309,7 @@ This script uses ENV Variables to control test. Here are few key ones:
   IPERF                      - 'iperf3' can be run on each flow, off by default. Example:
                                  IPERF=true ./test.sh
   HWOL                       - Hardware Offload Validation can be run on each applicable flow."
-                                 Parameters from IPERF will be used to generate traffic. Example:"
+                               Parameters from IPERF will be used to generate traffic. Example:"
                                  HWOL=true ./test.sh"
   OVN_TRACE                  - 'ovn-trace' can be run on each flow, off by deafult. Example:
                                  OVN_TRACE=true ./test.sh

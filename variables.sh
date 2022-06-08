@@ -345,7 +345,7 @@ process-help() {
       echo "  IPERF                      - 'iperf3' can be run on each flow, off by default. Example:"
       echo "                                 IPERF=true ./test.sh"
       echo "  HWOL                       - Hardware Offload Validation can be run on each applicable flow."
-      echo "                                 Parameters from IPERF will be used to generate traffic. Example:"
+      echo "                               Parameters from IPERF will be used to generate traffic. Example:"
       echo "                                 HWOL=true ./test.sh"
       echo "  OVN_TRACE                  - 'ovn-trace' can be run on each flow, off by deafult. Example:"
       echo "                                 OVN_TRACE=true ./test.sh"
