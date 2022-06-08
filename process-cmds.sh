@@ -74,12 +74,15 @@ process-iperf() {
     TASKSET_CMD="taskset ${FT_CLIENT_CPU_MASK} "
   fi
 
-  echo "${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE}"
-
   IPERF_FILENAME="${IPERF_LOGS_DIR}/${TEST_FILENAME}"
 
-  echo "kubectl exec -it -n ${FT_NAMESPACE} ${TEST_CLIENT_POD} -- ${TASKSET_CMD}${IPERF_CMD} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_TIME}"
+  echo "${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE}"
+  echo "kubectl exec -it -n ${FT_NAMESPACE} ${TEST_CLIENT_POD} -- ${TASKSET_CMD} ${IPERF_CMD} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_TIME}"
   kubectl exec -it -n "${FT_NAMESPACE}" "$TEST_CLIENT_POD" -- /bin/sh -c "${TASKSET_CMD} ${IPERF_CMD} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_TIME}"  > "${IPERF_FILENAME}"
+
+  echo "${MY_CLUSTER}:${TEST_CLIENT_NODE} -(Reverse)-> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE}"
+  echo "kubectl exec -it -n ${FT_NAMESPACE} ${TEST_CLIENT_POD} -- ${TASKSET_CMD} ${IPERF_CMD} -R -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_TIME}"
+  kubectl exec -it -n "${FT_NAMESPACE}" "$TEST_CLIENT_POD" -- /bin/sh -c "${TASKSET_CMD} ${IPERF_CMD} -R -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_TIME}"  >> "${IPERF_FILENAME}"
 
   # Dump command output
   if [ "$VERBOSE" == true ]; then
@@ -100,6 +103,7 @@ process-vf-rep-stats() {
   #     TEST_FILENAME
   #     TEST_SERVER_IPERF_DST
   #     TEST_SERVER_IPERF_DST_PORT
+  #     IPERF_OPT
 
   # This is a threshold to catch whether hardware offload is working
   THRESHOLD_PKT_COUNT=100
@@ -119,8 +123,8 @@ process-vf-rep-stats() {
   fi
 
   # Start IPERF in background
-  echo "kubectl exec -n ${FT_NAMESPACE} ${TEST_CLIENT_POD} -- ${TASKSET_CMD} ${IPERF_CMD} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_RUNTIME}"
-  kubectl exec -n "${FT_NAMESPACE}" "$TEST_CLIENT_POD" -- /bin/sh -c "${TASKSET_CMD} ${IPERF_CMD} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_RUNTIME}" > "${IPERF_FILENAME}" &
+  echo "kubectl exec -n ${FT_NAMESPACE} ${TEST_CLIENT_POD} -- ${TASKSET_CMD} ${IPERF_CMD} ${IPERF_OPT} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_RUNTIME}"
+  kubectl exec -n "${FT_NAMESPACE}" "$TEST_CLIENT_POD" -- /bin/sh -c "${TASKSET_CMD} ${IPERF_CMD} ${IPERF_OPT}-c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_RUNTIME}" > "${IPERF_FILENAME}" &
   IPERF_PID=$!
 
   # Wait to learn flows and hardware offload
@@ -257,6 +261,37 @@ process-hw-offload-validation() {
   vfRes3=$?
 
   if [ $vfRes1 -ne 0 ] || [ $vfRes2 -ne 0 ] || [ $vfRes3 -ne 0 ]; then
+    echo -e "${RED}FAILED${NC}\r\n"
+  else
+    echo -e "${GREEN}SUCCESS${NC}\r\n"
+  fi
+
+  IPERF_OPT="-R"
+  echo "${MY_CLUSTER}:${TEST_CLIENT_NODE} -(Reverse)-> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE}"
+  echo "Client Pod on Client Host VF Representor Results (Reverse):" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "Client Pod on Client Host VF Representor Results (Reverse):"
+  TEST_TOOLS_POD=$TOOLS_CLIENT_POD
+  TEST_VF_REP=$TEST_CLIENT_CLIENT_VF_REP
+  process-vf-rep-stats
+  vfRes4=$?
+
+  echo "Client Pod on Server Host VF Representor Results (Reverse):" >> "${HWOL_VALIDATION_FILENAME}"
+  echo
+  echo "Client Pod on Server Host VF Representor Results (Reverse):"
+  TEST_TOOLS_POD=$TOOLS_SERVER_POD
+  TEST_VF_REP=$TEST_SERVER_CLIENT_VF_REP
+  process-vf-rep-stats
+  vfRes5=$?
+
+  echo "Server Pod on Server Host VF Representor Results (Reverse):" >> "${HWOL_VALIDATION_FILENAME}"
+  echo
+  echo "Server Pod on Server Host VF Representor Results (Reverse):"
+  TEST_TOOLS_POD=$TOOLS_SERVER_POD
+  TEST_VF_REP=$TEST_SERVER_IPERF_SERVER_VF_REP
+  process-vf-rep-stats
+  vfRes6=$?
+
+  if [ $vfRes4 -ne 0 ] || [ $vfRes5 -ne 0 ] || [ $vfRes6 -ne 0 ]; then
     echo -e "${RED}FAILED${NC}\r\n"
   else
     echo -e "${GREEN}SUCCESS${NC}\r\n"
