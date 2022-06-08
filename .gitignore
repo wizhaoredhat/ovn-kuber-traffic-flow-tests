@@ -1,7 +1,7 @@
 # Ignore folders containing logs and trace
-iperf-logs/
-ovn-traces/
-hwol-logs/
+iperf-logs/*
+ovn-traces/*
+hwol-logs/*
 
 # Ignore generated yaml files
-manifests/yamls/
+manifests/yamls/*
