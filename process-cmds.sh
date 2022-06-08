@@ -124,7 +124,7 @@ process-vf-rep-stats() {
 
   # Start IPERF in background
   echo "kubectl exec -n ${FT_NAMESPACE} ${TEST_CLIENT_POD} -- ${TASKSET_CMD} ${IPERF_CMD} ${IPERF_OPT} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_RUNTIME}"
-  kubectl exec -n "${FT_NAMESPACE}" "$TEST_CLIENT_POD" -- /bin/sh -c "${TASKSET_CMD} ${IPERF_CMD} ${IPERF_OPT}-c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_RUNTIME}" > "${IPERF_FILENAME}" &
+  kubectl exec -n "${FT_NAMESPACE}" "$TEST_CLIENT_POD" -- /bin/sh -c "${TASKSET_CMD} ${IPERF_CMD} ${IPERF_OPT} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_RUNTIME}" > "${IPERF_FILENAME}" &
   IPERF_PID=$!
 
   # Wait to learn flows and hardware offload
