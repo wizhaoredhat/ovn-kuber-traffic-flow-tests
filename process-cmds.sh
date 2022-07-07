@@ -126,8 +126,8 @@ process-vf-rep-stats() {
 
   # Need sufficient time for validating hardware offload
   # TODO: How can we use IPERF_TIME
-  IPERF_RUNTIME=40
-  FLOW_LEARNING_TIME=5
+  IPERF_RUNTIME=45
+  FLOW_LEARNING_TIME=10
   TCPDUMP_RUNTIME=25
 
   IPERF_FILENAME="${HWOL_VALIDATION_FILENAME}.iperf"
