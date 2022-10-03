@@ -124,12 +124,6 @@ process-vf-rep-stats() {
   # This is a threshold to catch whether hardware offload is working
   THRESHOLD_PKT_COUNT=100
 
-  # Need sufficient time for validating hardware offload
-  # TODO: How can we use IPERF_TIME
-  IPERF_RUNTIME=40
-  FLOW_LEARNING_TIME=5
-  TCPDUMP_RUNTIME=25
-
   IPERF_FILENAME="${HWOL_VALIDATION_FILENAME}.iperf"
   TCPDUMP_FILENAME="${HWOL_VALIDATION_FILENAME}.tcpdump"
 
@@ -139,12 +133,12 @@ process-vf-rep-stats() {
   fi
 
   # Start IPERF in background
-  echo "kubectl exec -n ${FT_NAMESPACE} ${TEST_CLIENT_POD} -- ${TASKSET_CMD} ${IPERF_CMD} ${IPERF_OPT} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_RUNTIME}"
-  kubectl exec -n "${FT_NAMESPACE}" "$TEST_CLIENT_POD" -- /bin/sh -c "${TASKSET_CMD} ${IPERF_CMD} ${IPERF_OPT} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_RUNTIME}" > "${IPERF_FILENAME}" &
+  echo "kubectl exec -n ${FT_NAMESPACE} ${TEST_CLIENT_POD} -- ${TASKSET_CMD} ${IPERF_CMD} ${IPERF_OPT} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${HWOL_IPERF_TIME}"
+  kubectl exec -n "${FT_NAMESPACE}" "$TEST_CLIENT_POD" -- /bin/sh -c "${TASKSET_CMD} ${IPERF_CMD} ${IPERF_OPT} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${HWOL_IPERF_TIME}" > "${IPERF_FILENAME}" &
   IPERF_PID=$!
 
   # Wait to learn flows and hardware offload
-  sleep "${FLOW_LEARNING_TIME}"
+  sleep "${HWOL_FLOW_LEARNING_TIME}"
 
   # Record ethtool stats
   echo "kubectl exec -n \"${FT_NAMESPACE}\" \"${TEST_TOOLS_POD}\" -- /bin/sh -c \"ethtool -S ${TEST_VF_REP} | sed -n 's/^\s\+//p'\""
@@ -156,8 +150,8 @@ process-vf-rep-stats() {
   txpktstart=$(echo "$ethtoolstart" | sed -n "s/^tx_packets:\s\+//p" | sed "s/[^0-9]//g")
 
   # Start tcpdump
-  echo "kubectl exec -n \"${FT_NAMESPACE}\" \"${TEST_TOOLS_POD}\" -- /bin/sh -c \"timeout --preserve-status ${TCPDUMP_RUNTIME} tcpdump -v -i ${TEST_VF_REP} -n not arp\""
-  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "timeout --preserve-status ${TCPDUMP_RUNTIME} tcpdump -v -i ${TEST_VF_REP} -n not arp" > "${TCPDUMP_FILENAME}" 2>&1
+  echo "kubectl exec -n \"${FT_NAMESPACE}\" \"${TEST_TOOLS_POD}\" -- /bin/sh -c \"timeout --preserve-status ${HWOL_TCPDUMP_RUNTIME} tcpdump -v -i ${TEST_VF_REP} -n not arp\""
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "timeout --preserve-status ${HWOL_TCPDUMP_RUNTIME} tcpdump -v -i ${TEST_VF_REP} -n not arp" > "${TCPDUMP_FILENAME}" 2>&1
   cat "${TCPDUMP_FILENAME}" >> "${HWOL_VALIDATION_FILENAME}"
 
   # Record ethtool stats

@@ -52,6 +52,9 @@ OVN_K_NAMESPACE=${OVN_K_NAMESPACE:-"ovn-kubernetes"}
 SSL_ENABLE=${SSL_ENABLE:-"-noSSL"}
 # Hardware Offload Validation Control
 HWOL=${HWOL:-false}
+HWOL_IPERF_TIME=${HWOL_IPERF_TIME:-90}
+HWOL_FLOW_LEARNING_TIME=${HWOL_FLOW_LEARNING_TIME:-30}
+HWOL_TCPDUMP_RUNTIME=${HWOL_TCPDUMP_RUNTIME:-30}
 # External Access
 EXTERNAL_IP=${EXTERNAL_IP:-8.8.8.8}
 EXTERNAL_URL=${EXTERNAL_URL:-google.com}
@@ -190,6 +193,10 @@ if [ ${COMMAND} == "test" ] ; then
   echo "    FT_DEBUG                           $FT_DEBUG"
   echo "    CURL                               $CURL"
   echo "    CURL_CMD                           $CURL_CMD"
+  echo "    HWOL                               $HWOL"
+  echo "    HWOL_IPERF_TIME                    $HWOL_IPERF_TIME"
+  echo "    HWOL_FLOW_LEARNING_TIME            $HWOL_FLOW_LEARNING_TIME"
+  echo "    HWOL_TCPDUMP_RUNTIME               $HWOL_TCPDUMP_RUNTIME"
   echo "    IPERF                              $IPERF"
   echo "    IPERF_CMD                          $IPERF_CMD"
   echo "    IPERF_TIME                         $IPERF_TIME"

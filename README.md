@@ -448,6 +448,10 @@ Default/Override Values:
     FT_DEBUG                           false
     CURL                               true
     CURL_CMD                           curl -m 5
+    HWOL                               true
+    HWOL_IPERF_TIME                    90
+    HWOL_FLOW_LEARNING_TIME            30
+    HWOL_TCPDUMP_RUNTIME               30
     IPERF                              false
     IPERF_CMD                          iperf3
     IPERF_TIME                         10
