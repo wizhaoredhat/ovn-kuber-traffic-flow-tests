@@ -175,7 +175,7 @@ process-vf-rep-stats() {
   txcount=$(( txpktend - txpktstart ))
 
   echo "Summary (see ${HWOL_VALIDATION_FILENAME} for full detail):"
-  echo "Summary Ethtool results for ${TEST_CLIENT_CLIENT_VF_REP}:"
+  echo "Summary Ethtool results for ${TEST_VF_REP}:"
   echo "RX Packets: ${rxpktend} - ${rxpktstart} = ${rxcount}"
   echo "TX Packets: ${txpktend} - ${txpktstart} = ${txcount}"
 
