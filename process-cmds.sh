@@ -113,35 +113,17 @@ process-iperf() {
   cat ${IPERF_FILENAME_REVERSE_TEST} | grep -cq "sender" && echo -e "\r\n${GREEN}SUCCESS${NC}\r\n" || echo -e "\r\n${RED}FAILED${NC}\r\n"
 }
 
-process-vf-rep-stats() {
+inspect-vf-rep() {
   # The following VARIABLES are used by this function:
-  #     TEST_CLIENT_POD
-  #     HWOL_VALIDATION_FILENAME
-  #     TEST_SERVER_IPERF_DST
-  #     TEST_SERVER_IPERF_DST_PORT
-  #     IPERF_OPT
+  #     TEST_VF_REP
+  #     TEST_TOOLS_POD
+  retVal=0
 
   # This is a threshold to catch whether hardware offload is working
-  THRESHOLD_PKT_COUNT=100
-
-  IPERF_FILENAME="${HWOL_VALIDATION_FILENAME}.iperf"
-  TCPDUMP_FILENAME="${HWOL_VALIDATION_FILENAME}.tcpdump"
-
-  TASKSET_CMD=""
-  if [[ ! -z "${FT_CLIENT_CPU_MASK}" ]]; then
-    TASKSET_CMD="taskset ${FT_CLIENT_CPU_MASK} "
-  fi
-
-  # Start IPERF in background
-  echo "kubectl exec -n ${FT_NAMESPACE} ${TEST_CLIENT_POD} -- ${TASKSET_CMD} ${IPERF_CMD} ${IPERF_OPT} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${HWOL_IPERF_TIME}"
-  kubectl exec -n "${FT_NAMESPACE}" "$TEST_CLIENT_POD" -- /bin/sh -c "${TASKSET_CMD} ${IPERF_CMD} ${IPERF_OPT} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${HWOL_IPERF_TIME}" > "${IPERF_FILENAME}" &
-  IPERF_PID=$!
-
-  # Wait to learn flows and hardware offload
-  sleep "${HWOL_FLOW_LEARNING_TIME}"
+  THRESHOLD_PKT_COUNT=10000
 
   # Record ethtool stats
-  echo "kubectl exec -n \"${FT_NAMESPACE}\" \"${TEST_TOOLS_POD}\" -- /bin/sh -c \"ethtool -S ${TEST_VF_REP} | sed -n 's/^\s\+//p'\""
+  [ "$FT_DEBUG" == true ] && echo "kubectl exec -n \"${FT_NAMESPACE}\" \"${TEST_TOOLS_POD}\" -- /bin/sh -c \"ethtool -S ${TEST_VF_REP} | sed -n 's/^\s\+//p'\""
   ethtoolstart=$(kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "ethtool -S ${TEST_VF_REP} | sed -n 's/^\s\+//p'")
   echo "${ethtoolstart}" >> "${HWOL_VALIDATION_FILENAME}"
 
@@ -152,7 +134,7 @@ process-vf-rep-stats() {
   # Start tcpdump
   echo "kubectl exec -n \"${FT_NAMESPACE}\" \"${TEST_TOOLS_POD}\" -- /bin/sh -c \"timeout --preserve-status ${HWOL_TCPDUMP_RUNTIME} tcpdump -v -i ${TEST_VF_REP} -n not arp\""
   kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "timeout --preserve-status ${HWOL_TCPDUMP_RUNTIME} tcpdump -v -i ${TEST_VF_REP} -n not arp" > "${TCPDUMP_FILENAME}" 2>&1
-  cat "${TCPDUMP_FILENAME}" >> "${HWOL_VALIDATION_FILENAME}"
+  tail --lines=2000 "${TCPDUMP_FILENAME}" >> "${HWOL_VALIDATION_FILENAME}"
 
   # Record ethtool stats
   # This records the ethtool stats before Iperf finishes because at the end of Iperf
@@ -168,10 +150,78 @@ process-vf-rep-stats() {
   rxcount=$(( rxpktend - rxpktstart ))
   txcount=$(( txpktend - txpktstart ))
 
-  echo "Summary (see ${HWOL_VALIDATION_FILENAME} for full detail):"
+  if [ "$VERBOSE" == true ]; then
+    echo "Tcpdump Output:"
+    tail --lines=2000 ${TCPDUMP_FILENAME} | awk NF
+  else
+    echo "Summary Tcpdump Output:"
+    tail ${TCPDUMP_FILENAME} | awk NF
+  fi
+
   echo "Summary Ethtool results for ${TEST_VF_REP}:"
-  echo "RX Packets: ${rxpktend} - ${rxpktstart} = ${rxcount}"
-  echo "TX Packets: ${txpktend} - ${txpktstart} = ${txcount}"
+  echo " - RX Packets: ${rxpktend} - ${rxpktstart} = ${rxcount}"
+  echo " - TX Packets: ${txpktend} - ${txpktstart} = ${txcount}"
+
+  if (( rxcount > THRESHOLD_PKT_COUNT )) || (( txcount > THRESHOLD_PKT_COUNT )); then
+    retVal=1
+  fi
+
+  return $retVal
+}
+
+process-vf-rep-stats() {
+  # The following VARIABLES are used by this function:
+  #     TEST_CLIENT_POD
+  #     HWOL_VALIDATION_FILENAME
+  #     TEST_SERVER_IPERF_DST
+  #     TEST_SERVER_IPERF_DST_PORT
+  #     IPERF_OPT
+  clientRetVal=0
+  serverRetVal=0
+
+  IPERF_FILENAME="${HWOL_VALIDATION_FILENAME}.iperf"
+  TCPDUMP_FILENAME="${HWOL_VALIDATION_FILENAME}.tcpdump"
+  touch "${IPERF_FILENAME}"
+  touch "${TCPDUMP_FILENAME}"
+
+  TASKSET_CMD=""
+  if [[ ! -z "${FT_CLIENT_CPU_MASK}" ]]; then
+    TASKSET_CMD="taskset ${FT_CLIENT_CPU_MASK} "
+  fi
+
+  # Start IPERF in background
+  KUBE_EXEC_IPERF="kubectl exec -n ${FT_NAMESPACE} ${TEST_CLIENT_POD} -- ${TASKSET_CMD} ${IPERF_CMD} ${IPERF_OPT} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${HWOL_IPERF_TIME}"
+  kubectl exec -n "${FT_NAMESPACE}" "$TEST_CLIENT_POD" -- /bin/sh -c "${TASKSET_CMD} ${IPERF_CMD} ${IPERF_OPT} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${HWOL_IPERF_TIME}" > "${IPERF_FILENAME}" &
+  IPERF_PID=$!
+
+  # Wait to learn flows and hardware offload
+  sleep "${HWOL_FLOW_LEARNING_TIME}"
+
+  echo -e "= Client Pod VF Representor Results =" >> "${HWOL_VALIDATION_FILENAME}"
+  echo -e "= Client Pod VF Representor Results ="
+  kubectl exec -n "${FT_NAMESPACE}" "${CLIENT_TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"ethtool -i ${CLIENT_TEST_VF_REP} | grep driver\"" >> "${HWOL_VALIDATION_FILENAME}"
+  if [ $? -eq 0 ]; then
+    TEST_VF_REP=${CLIENT_TEST_VF_REP}
+    TEST_TOOLS_POD=${CLIENT_TEST_TOOLS_POD}
+    inspect-vf-rep
+    clientRetVal=$?
+  else
+    echo -e "The client VF Representor ${CLIENT_TEST_VF_REP} does not exist!" >> "${HWOL_VALIDATION_FILENAME}"
+    echo -e "The client VF Representor ${CLIENT_TEST_VF_REP} does not exist!"
+  fi
+
+  echo -e "= Server Pod VF Representor Results =" >> "${HWOL_VALIDATION_FILENAME}"
+  echo -e "= Server Pod VF Representor Results ="
+  kubectl exec -n "${FT_NAMESPACE}" "${SERVER_TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"ethtool -i ${SERVER_TEST_VF_REP} | grep driver\"" >> "${HWOL_VALIDATION_FILENAME}"
+  if [ $? -eq 0 ]; then
+    TEST_VF_REP=${SERVER_TEST_VF_REP}
+    TEST_TOOLS_POD=${SERVER_TEST_TOOLS_POD}
+    inspect-vf-rep
+    serverRetVal=$?
+  else
+    echo -e "The server VF Representor ${SERVER_TEST_VF_REP} does not exist!" >> "${HWOL_VALIDATION_FILENAME}"
+    echo -e "The server VF Representor ${SERVER_TEST_VF_REP} does not exist!"
+  fi
 
   # Wait for Iperf to finish
   wait $IPERF_PID
@@ -180,21 +230,19 @@ process-vf-rep-stats() {
   cat "${IPERF_FILENAME}" >> "${HWOL_VALIDATION_FILENAME}"
 
   # Dump command output
+  echo "See ${HWOL_VALIDATION_FILENAME} for full details."
+  echo ${KUBE_EXEC_IPERF}
   if [ "$VERBOSE" == true ]; then
-    echo "Full Tcpdump Output:"
-    cat ${TCPDUMP_FILENAME}
     echo "Full Iperf Output:"
     cat ${IPERF_FILENAME}
   else
-    echo "Summary Tcpdump Output:"
-    tail ${TCPDUMP_FILENAME}
     echo "Summary Iperf Output:"
     cat ${IPERF_FILENAME} | grep -B 1 -A 1 "sender"
   fi
 
   cat ${IPERF_FILENAME} | grep -cq "sender" && retVal=0 || retVal=1
 
-  if (( rxcount > THRESHOLD_PKT_COUNT )) || (( txcount > THRESHOLD_PKT_COUNT )); then
+  if [ ${clientRetVal} -ne 0 ] || [ ${serverRetVal} -ne 0 ] || [ ${retVal} -ne 0 ]; then
     retVal=1
   fi
 
@@ -247,32 +295,38 @@ process-hw-offload-validation() {
     echo "================================================"
   fi
 
+  echo "=== HWOL ==="
+
   IPERF_OPT=$IPERF_FORWARD_TEST_OPT
   HWOL_VALIDATION_FILENAME="${HW_OFFLOAD_LOGS_DIR}/${FORWARD_TEST_FILENAME}"
-  echo "=== HWOL ==="
+  echo "== ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} ==" > "${HWOL_VALIDATION_FILENAME}"
   echo "== ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} =="
-  echo -e "= Client Pod on Client Host VF Representor Results =" > "${HWOL_VALIDATION_FILENAME}"
-  echo -e "= Client Pod on Client Host VF Representor Results ="
-  TEST_TOOLS_POD=$TOOLS_CLIENT_POD
-  TEST_VF_REP=$TEST_CLIENT_CLIENT_VF_REP
-  process-vf-rep-stats
-  vfRes1=$?
 
-  echo -e "\r\n= Client Pod on Server Host VF Representor Results =" >> "${HWOL_VALIDATION_FILENAME}"
-  echo -e "\r\n= Client Pod on Server Host VF Representor Results ="
-  TEST_TOOLS_POD=$TOOLS_SERVER_POD
-  TEST_VF_REP=$TEST_SERVER_CLIENT_VF_REP
-  process-vf-rep-stats
-  vfRes2=$?
+  if [ "$CLIENT_SERVER_SAME_NODE" == false ]; then
+    CLIENT_TEST_TOOLS_POD=$TOOLS_CLIENT_POD
+  else
+    CLIENT_TEST_TOOLS_POD=$TOOLS_SERVER_POD
+  fi
 
-  echo -e "\r\n= Server Pod on Server Host VF Representor Results =" >> "${HWOL_VALIDATION_FILENAME}"
-  echo -e "\r\n= Server Pod on Server Host VF Representor Results ="
-  TEST_TOOLS_POD=$TOOLS_SERVER_POD
-  TEST_VF_REP=$TEST_SERVER_IPERF_SERVER_VF_REP
-  process-vf-rep-stats
-  vfRes3=$?
+  if [ "$CLIENT_HOSTBACKED_POD" == false ]; then
+    if [ "$CLIENT_SERVER_SAME_NODE" == false ]; then
+      CLIENT_TEST_VF_REP=$TEST_CLIENT_CLIENT_VF_REP
+    else
+      CLIENT_TEST_VF_REP=$TEST_SERVER_CLIENT_VF_REP
+    fi
+  else
+    CLIENT_TEST_VF_REP="ovn-k8s-mp0_0"
+  fi
 
-  if [ $vfRes1 -ne 0 ] || [ $vfRes2 -ne 0 ] || [ $vfRes3 -ne 0 ]; then
+  SERVER_TEST_TOOLS_POD=$TOOLS_SERVER_POD
+  if [ "$SERVER_HOSTBACKED_POD" == false ]; then
+    SERVER_TEST_VF_REP=$TEST_SERVER_IPERF_SERVER_VF_REP
+  else
+    SERVER_TEST_VF_REP="ovn-k8s-mp0_0"
+  fi
+
+  process-vf-rep-stats
+  if [ $? -ne 0 ]; then
     echo -e "\r\n${RED}FAILED${NC}\r\n"
   else
     echo -e "\r\n${GREEN}SUCCESS${NC}\r\n"
@@ -280,29 +334,11 @@ process-hw-offload-validation() {
 
   IPERF_OPT=$IPERF_REVERSE_TEST_OPT
   HWOL_VALIDATION_FILENAME="${HW_OFFLOAD_LOGS_DIR}/${REVERSE_TEST_FILENAME}"
+  echo "== ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} (Reverse) ==" > "${HWOL_VALIDATION_FILENAME}"
   echo "== ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} (Reverse) =="
-  echo -e "= Client Pod on Client Host VF Representor Results (Reverse) =" > "${HWOL_VALIDATION_FILENAME}"
-  echo -e "= Client Pod on Client Host VF Representor Results (Reverse) ="
-  TEST_TOOLS_POD=$TOOLS_CLIENT_POD
-  TEST_VF_REP=$TEST_CLIENT_CLIENT_VF_REP
-  process-vf-rep-stats
-  vfRes4=$?
 
-  echo -e "\r\n= Client Pod on Server Host VF Representor Results (Reverse) =" >> "${HWOL_VALIDATION_FILENAME}"
-  echo -e "\r\n= Client Pod on Server Host VF Representor Results (Reverse) ="
-  TEST_TOOLS_POD=$TOOLS_SERVER_POD
-  TEST_VF_REP=$TEST_SERVER_CLIENT_VF_REP
   process-vf-rep-stats
-  vfRes5=$?
-
-  echo -e "\r\n= Server Pod on Server Host VF Representor Results (Reverse) =" >> "${HWOL_VALIDATION_FILENAME}"
-  echo -e "\r\n= Server Pod on Server Host VF Representor Results (Reverse) ="
-  TEST_TOOLS_POD=$TOOLS_SERVER_POD
-  TEST_VF_REP=$TEST_SERVER_IPERF_SERVER_VF_REP
-  process-vf-rep-stats
-  vfRes6=$?
-
-  if [ $vfRes4 -ne 0 ] || [ $vfRes5 -ne 0 ] || [ $vfRes6 -ne 0 ]; then
+  if [ $? -ne 0 ]; then
     echo -e "\r\n${RED}FAILED${NC}\r\n"
   else
     echo -e "\r\n${GREEN}SUCCESS${NC}\r\n"
