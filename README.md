@@ -452,6 +452,9 @@ Default/Override Values:
     HWOL_IPERF_TIME                    90
     HWOL_FLOW_LEARNING_TIME            30
     HWOL_TCPDUMP_RUNTIME               30
+    HWOL_THRESHOLD_PKT_COUNT           10000
+    HWOL_THRESHOLD_LOW_PKT_RATE        10000000
+    HWOL_SUMMARY_COLUMN_DELIM          ;
     IPERF                              false
     IPERF_CMD                          iperf3
     IPERF_TIME                         10

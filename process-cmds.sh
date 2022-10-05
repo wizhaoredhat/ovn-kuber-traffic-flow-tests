@@ -117,10 +117,8 @@ inspect-vf-rep() {
   # The following VARIABLES are used by this function:
   #     TEST_VF_REP
   #     TEST_TOOLS_POD
+  #     RX_COUNT
   retVal=0
-
-  # This is a threshold to catch whether hardware offload is working
-  THRESHOLD_PKT_COUNT=10000
 
   # Record ethtool stats
   [ "$FT_DEBUG" == true ] && echo "kubectl exec -n \"${FT_NAMESPACE}\" \"${TEST_TOOLS_POD}\" -- /bin/sh -c \"ethtool -S ${TEST_VF_REP} | sed -n 's/^\s\+//p'\""
@@ -162,7 +160,12 @@ inspect-vf-rep() {
   echo " - RX Packets: ${rxpktend} - ${rxpktstart} = ${rxcount}"
   echo " - TX Packets: ${txpktend} - ${txpktstart} = ${txcount}"
 
-  if (( rxcount > THRESHOLD_PKT_COUNT )) || (( txcount > THRESHOLD_PKT_COUNT )); then
+  if (( rxcount > HWOL_THRESHOLD_PKT_COUNT )) || (( txcount > HWOL_THRESHOLD_PKT_COUNT )); then
+    if (( rxcount > txcount )); then
+      RX_COUNT=${rxcount}
+    else
+      RX_COUNT=${txcount}
+    fi
     retVal=1
   fi
 
@@ -177,7 +180,9 @@ process-vf-rep-stats() {
   #     TEST_SERVER_IPERF_DST_PORT
   #     IPERF_OPT
   clientRetVal=0
+  clientRxCount=0
   serverRetVal=0
+  serverRxCount=0
 
   IPERF_FILENAME="${HWOL_VALIDATION_FILENAME}.iperf"
   TCPDUMP_FILENAME="${HWOL_VALIDATION_FILENAME}.tcpdump"
@@ -199,12 +204,14 @@ process-vf-rep-stats() {
 
   echo -e "= Client Pod VF Representor Results =" >> "${HWOL_VALIDATION_FILENAME}"
   echo -e "= Client Pod VF Representor Results ="
-  kubectl exec -n "${FT_NAMESPACE}" "${CLIENT_TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"ethtool -i ${CLIENT_TEST_VF_REP} | grep driver\"" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${CLIENT_TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"ethtool -i ${CLIENT_TEST_VF_REP}\"" >> "${HWOL_VALIDATION_FILENAME}"
   if [ $? -eq 0 ]; then
     TEST_VF_REP=${CLIENT_TEST_VF_REP}
     TEST_TOOLS_POD=${CLIENT_TEST_TOOLS_POD}
+    RX_COUNT=0
     inspect-vf-rep
     clientRetVal=$?
+    clientRxCount=${RX_COUNT}
   else
     echo -e "The client VF Representor ${CLIENT_TEST_VF_REP} does not exist!" >> "${HWOL_VALIDATION_FILENAME}"
     echo -e "The client VF Representor ${CLIENT_TEST_VF_REP} does not exist!"
@@ -212,12 +219,14 @@ process-vf-rep-stats() {
 
   echo -e "= Server Pod VF Representor Results =" >> "${HWOL_VALIDATION_FILENAME}"
   echo -e "= Server Pod VF Representor Results ="
-  kubectl exec -n "${FT_NAMESPACE}" "${SERVER_TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"ethtool -i ${SERVER_TEST_VF_REP} | grep driver\"" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${SERVER_TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"ethtool -i ${SERVER_TEST_VF_REP}\"" >> "${HWOL_VALIDATION_FILENAME}"
   if [ $? -eq 0 ]; then
     TEST_VF_REP=${SERVER_TEST_VF_REP}
     TEST_TOOLS_POD=${SERVER_TEST_TOOLS_POD}
+    RX_COUNT=0
     inspect-vf-rep
     serverRetVal=$?
+    serverRxCount=${RX_COUNT}
   else
     echo -e "The server VF Representor ${SERVER_TEST_VF_REP} does not exist!" >> "${HWOL_VALIDATION_FILENAME}"
     echo -e "The server VF Representor ${SERVER_TEST_VF_REP} does not exist!"
@@ -225,6 +234,9 @@ process-vf-rep-stats() {
 
   # Wait for Iperf to finish
   wait $IPERF_PID
+
+  # Sleep 1 second just in case iperf is still running.
+  sleep 1
 
   # Concatenate the background Iperf results into the same file
   cat "${IPERF_FILENAME}" >> "${HWOL_VALIDATION_FILENAME}"
@@ -241,6 +253,29 @@ process-vf-rep-stats() {
   fi
 
   cat ${IPERF_FILENAME} | grep -cq "sender" && retVal=0 || retVal=1
+  if [ ${retVal} -eq 0 ]; then
+    cat ${IPERF_FILENAME} | grep "sender" | awk -v var="$HWOL_SUMMARY_COLUMN_DELIM" '{printf "%s%s%s",var,$7,$8}' >> "${HWOL_SUMMARY_FILENAME}"
+  else
+    echo -ne "${HWOL_SUMMARY_COLUMN_DELIM}0 bits/sec" >> "${HWOL_SUMMARY_FILENAME}"
+  fi
+
+  DROPCNT=`cat ${IPERF_FILENAME} | grep sec | awk -v thres=${HWOL_THRESHOLD_LOW_PKT_RATE} \
+  'BEGIN { cnt = 0 } \
+  { if ( $8 == "Gbits/sec" ) value=$7*1000000000; \
+    else if ( $8 == "Mbits/sec" ) value=$7*1000000; \
+    else if ( $8 == "Kbits/sec" ) value=$7*1000; \
+    else value=$7; \
+    if ( value < thres ) cnt+=1; } \
+  END { print cnt }'`
+
+  echo "There were $DROPCNT drops during Iperf."
+  echo -ne "${HWOL_SUMMARY_COLUMN_DELIM}$DROPCNT" >> "${HWOL_SUMMARY_FILENAME}"
+
+  if [ ${clientRetVal} -ne 0 ] || [ ${serverRetVal} -ne 0 ]; then
+    echo -ne "${HWOL_SUMMARY_COLUMN_DELIM}Detected ${clientRxCount} Packets On Client and ${serverRxCount} Packets On Server VF Reps" >> "${HWOL_SUMMARY_FILENAME}"
+  else
+    echo -ne "${HWOL_SUMMARY_COLUMN_DELIM}No Packets Detected On Client Or Server VF Reps" >> "${HWOL_SUMMARY_FILENAME}"
+  fi
 
   if [ ${clientRetVal} -ne 0 ] || [ ${serverRetVal} -ne 0 ] || [ ${retVal} -ne 0 ]; then
     retVal=1
@@ -296,11 +331,13 @@ process-hw-offload-validation() {
   fi
 
   echo "=== HWOL ==="
+  touch ${HWOL_SUMMARY_FILENAME}
 
   IPERF_OPT=$IPERF_FORWARD_TEST_OPT
   HWOL_VALIDATION_FILENAME="${HW_OFFLOAD_LOGS_DIR}/${FORWARD_TEST_FILENAME}"
   echo "== ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} ==" > "${HWOL_VALIDATION_FILENAME}"
   echo "== ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} =="
+  echo -ne "${TEST_FILENAME}" >> "${HWOL_SUMMARY_FILENAME}"
 
   if [ "$CLIENT_SERVER_SAME_NODE" == false ]; then
     CLIENT_TEST_TOOLS_POD=$TOOLS_CLIENT_POD
@@ -328,8 +365,10 @@ process-hw-offload-validation() {
   process-vf-rep-stats
   if [ $? -ne 0 ]; then
     echo -e "\r\n${RED}FAILED${NC}\r\n"
+    echo -ne "${HWOL_SUMMARY_COLUMN_DELIM}Fail" >> "${HWOL_SUMMARY_FILENAME}"
   else
     echo -e "\r\n${GREEN}SUCCESS${NC}\r\n"
+    echo -ne "${HWOL_SUMMARY_COLUMN_DELIM}Pass" >> "${HWOL_SUMMARY_FILENAME}"
   fi
 
   IPERF_OPT=$IPERF_REVERSE_TEST_OPT
@@ -340,8 +379,10 @@ process-hw-offload-validation() {
   process-vf-rep-stats
   if [ $? -ne 0 ]; then
     echo -e "\r\n${RED}FAILED${NC}\r\n"
+    echo -e "${HWOL_SUMMARY_COLUMN_DELIM}Fail" >> "${HWOL_SUMMARY_FILENAME}"
   else
     echo -e "\r\n${GREEN}SUCCESS${NC}\r\n"
+    echo -e "${HWOL_SUMMARY_COLUMN_DELIM}Pass" >> "${HWOL_SUMMARY_FILENAME}"
   fi
 }
 

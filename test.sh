@@ -59,6 +59,7 @@ if [ "$FT_VARS" == true ]; then
   dump-working-data
 fi
 
+HWOL_SUMMARY_FILENAME="${HW_OFFLOAD_LOGS_DIR}/summary.txt"
 
 #
 # Test each scenario
