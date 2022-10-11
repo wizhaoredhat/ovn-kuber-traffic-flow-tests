@@ -104,6 +104,7 @@ generate_yamls() {
   # iperf-server-pod-v4-host.yaml
   namespace=${FT_NAMESPACE} \
   test_image=${TEST_IMAGE} \
+  iperf_cmd=${IPERF_CMD} \
   iperf_clusterip_host_svc_port=${IPERF_CLUSTERIP_HOST_SVC_PORT} \
   j2 "./manifests/iperf-server-pod-v4-host.yaml.j2" -o "./manifests/yamls/iperf-server-pod-v4-host.yaml"
 
@@ -112,12 +113,14 @@ generate_yamls() {
   net_attach_def_name=${NET_ATTACH_DEF_NAME} \
   sriov_resource_name=${SRIOV_RESOURCE_NAME} \
   test_image=${TEST_IMAGE} \
+  iperf_cmd=${IPERF_CMD} \
   iperf_clusterip_pod_svc_port=${IPERF_CLUSTERIP_POD_SVC_PORT} \
   j2 "./manifests/iperf-server-pod-v4-sriov.yaml.j2" -o "./manifests/yamls/iperf-server-pod-v4-sriov.yaml"
 
   # iperf-server-pod-v4.yaml
   namespace=${FT_NAMESPACE} \
   test_image=${TEST_IMAGE} \
+  iperf_cmd=${IPERF_CMD} \
   iperf_clusterip_pod_svc_port=${IPERF_CLUSTERIP_POD_SVC_PORT} \
   j2 "./manifests/iperf-server-pod-v4.yaml.j2" -o "./manifests/yamls/iperf-server-pod-v4.yaml"
 

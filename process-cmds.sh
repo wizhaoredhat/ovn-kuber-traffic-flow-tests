@@ -90,27 +90,38 @@ process-iperf() {
     cat ${IPERF_FILENAME_FORWARD_TEST}
   else
     echo "Summary (see ${IPERF_FILENAME_FORWARD_TEST} for full detail):"
-    cat ${IPERF_FILENAME_FORWARD_TEST} | grep -B 1 -A 1 "sender"
+    if [[ "$IPERF_CMD" == *"iperf3"* ]]; then
+      cat ${IPERF_FILENAME_FORWARD_TEST} | grep -B 1 -A 1 "sender"
+    else
+      cat ${IPERF_FILENAME_FORWARD_TEST} | grep "0.0\-${IPERF_TIME}"
+    fi
   fi
 
   # Print SUCCESS or FAILURE
-  cat ${IPERF_FILENAME_FORWARD_TEST} | grep -cq "sender" && echo -e "\r\n${GREEN}SUCCESS${NC}\r\n" || echo -e "\r\n${RED}FAILED${NC}\r\n"
-
-  echo "== ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} (Reverse) =="
-  echo "kubectl exec -n ${FT_NAMESPACE} ${TEST_CLIENT_POD} -- ${TASKSET_CMD} ${IPERF_CMD} ${IPERF_REVERSE_TEST_OPT} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_TIME}"
-  kubectl exec -n "${FT_NAMESPACE}" "$TEST_CLIENT_POD" -- /bin/sh -c "${TASKSET_CMD} ${IPERF_CMD} ${IPERF_REVERSE_TEST_OPT} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_TIME}"  > "${IPERF_FILENAME_REVERSE_TEST}"
-
-  # Dump command output
-  if [ "$VERBOSE" == true ]; then
-    echo "Full Output (from ${IPERF_FILENAME_REVERSE_TEST}):"
-    cat ${IPERF_FILENAME_REVERSE_TEST}
+  if [[ "$IPERF_CMD" == *"iperf3"* ]]; then
+    cat ${IPERF_FILENAME_FORWARD_TEST} | grep -cq "sender" && echo -e "\r\n${GREEN}SUCCESS${NC}\r\n" || echo -e "\r\n${RED}FAILED${NC}\r\n"
   else
-    echo "Summary (see ${IPERF_FILENAME_REVERSE_TEST} for full detail):"
-    cat ${IPERF_FILENAME_REVERSE_TEST} | grep -B 1 -A 1 "sender"
+    cat ${IPERF_FILENAME_FORWARD_TEST} | grep -cq "0.0\-${IPERF_TIME}" && echo -e "\r\n${GREEN}SUCCESS${NC}\r\n" || echo -e "\r\n${RED}FAILED${NC}\r\n"
   fi
 
-  # Print SUCCESS or FAILURE
-  cat ${IPERF_FILENAME_REVERSE_TEST} | grep -cq "sender" && echo -e "\r\n${GREEN}SUCCESS${NC}\r\n" || echo -e "\r\n${RED}FAILED${NC}\r\n"
+  # Only iperf3 has reverse supported.
+  if [[ "$IPERF_CMD" == *"iperf3"* ]]; then
+    echo "== ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} (Reverse) =="
+    echo "kubectl exec -n ${FT_NAMESPACE} ${TEST_CLIENT_POD} -- ${TASKSET_CMD} ${IPERF_CMD} ${IPERF_REVERSE_TEST_OPT} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_TIME}"
+    kubectl exec -n "${FT_NAMESPACE}" "$TEST_CLIENT_POD" -- /bin/sh -c "${TASKSET_CMD} ${IPERF_CMD} ${IPERF_REVERSE_TEST_OPT} -c ${TEST_SERVER_IPERF_DST} -p ${TEST_SERVER_IPERF_DST_PORT} -t ${IPERF_TIME}"  > "${IPERF_FILENAME_REVERSE_TEST}"
+
+    # Dump command output
+    if [ "$VERBOSE" == true ]; then
+      echo "Full Output (from ${IPERF_FILENAME_REVERSE_TEST}):"
+      cat ${IPERF_FILENAME_REVERSE_TEST}
+    else
+      echo "Summary (see ${IPERF_FILENAME_REVERSE_TEST} for full detail):"
+      cat ${IPERF_FILENAME_REVERSE_TEST} | grep -B 1 -A 1 "sender"
+    fi
+
+    # Print SUCCESS or FAILURE
+    cat ${IPERF_FILENAME_REVERSE_TEST} | grep -cq "sender" && echo -e "\r\n${GREEN}SUCCESS${NC}\r\n" || echo -e "\r\n${RED}FAILED${NC}\r\n"
+  fi
 }
 
 inspect-vf-rep() {
@@ -249,22 +260,35 @@ process-vf-rep-stats() {
     cat ${IPERF_FILENAME}
   else
     echo "Summary Iperf Output:"
-    cat ${IPERF_FILENAME} | grep -B 1 -A 1 "sender"
+    if [[ "$IPERF_CMD" == *"iperf3"* ]]; then
+      cat ${IPERF_FILENAME} | grep -B 1 -A 1 "sender"
+    else
+      cat ${IPERF_FILENAME} | grep "0.0\-${HWOL_IPERF_TIME}"
+    fi
   fi
 
-  cat ${IPERF_FILENAME} | grep -cq "sender" && retVal=0 || retVal=1
+  if [[ "$IPERF_CMD" == *"iperf3"* ]]; then
+    cat ${IPERF_FILENAME} | grep -cq "sender" && retVal=0 || retVal=1
+  else
+    cat ${IPERF_FILENAME} | grep -cq "0.0\-${HWOL_IPERF_TIME}" && retVal=0 || retVal=1
+  fi
+
   if [ ${retVal} -eq 0 ]; then
-    cat ${IPERF_FILENAME} | grep "sender" | awk -v var="$HWOL_SUMMARY_COLUMN_DELIM" '{printf "%s%s%s",var,$7,$8}' >> "${HWOL_SUMMARY_FILENAME}"
+    if [[ "$IPERF_CMD" == *"iperf3"* ]]; then
+      cat ${IPERF_FILENAME} | grep "sender" | awk -v var="$HWOL_SUMMARY_COLUMN_DELIM" '{printf "%s%s%s",var,$7,$8}' >> "${HWOL_SUMMARY_FILENAME}"
+    else
+      cat ${IPERF_FILENAME} | grep "0.0\-${HWOL_IPERF_TIME}" | awk -v var="$HWOL_SUMMARY_COLUMN_DELIM" '{printf "%s%s%s",var,$7,$8}' >> "${HWOL_SUMMARY_FILENAME}"
+    fi
   else
     echo -ne "${HWOL_SUMMARY_COLUMN_DELIM}0 bits/sec" >> "${HWOL_SUMMARY_FILENAME}"
   fi
 
-  DROPCNT=`cat ${IPERF_FILENAME} | grep sec | awk -v thres=${HWOL_THRESHOLD_LOW_PKT_RATE} \
+  DROPCNT=`cat ${IPERF_FILENAME} | grep sec | tr - " " | awk -v thres=${HWOL_THRESHOLD_LOW_PKT_RATE} \
   'BEGIN { cnt = 0 } \
-  { if ( $8 == "Gbits/sec" ) value=$7*1000000000; \
-    else if ( $8 == "Mbits/sec" ) value=$7*1000000; \
-    else if ( $8 == "Kbits/sec" ) value=$7*1000; \
-    else value=$7; \
+  { if ( $9 == "Gbits/sec" ) value=$8*1000000000; \
+    else if ( $9 == "Mbits/sec" ) value=$8*1000000; \
+    else if ( $9 == "Kbits/sec" ) value=$8*1000; \
+    else value=$8; \
     if ( value < thres ) cnt+=1; } \
   END { print cnt }'`
 
@@ -277,7 +301,7 @@ process-vf-rep-stats() {
     echo -ne "${HWOL_SUMMARY_COLUMN_DELIM}No Packets Detected On Client Or Server VF Reps" >> "${HWOL_SUMMARY_FILENAME}"
   fi
 
-  if [ ${clientRetVal} -ne 0 ] || [ ${serverRetVal} -ne 0 ] || [ ${retVal} -ne 0 ]; then
+  if [ ${clientRetVal} -ne 0 ] || [ ${serverRetVal} -ne 0 ] || [ ${retVal} -ne 0 ] || [ ${DROPCNT} -ne 0 ]; then
     retVal=1
   fi
 
@@ -371,18 +395,23 @@ process-hw-offload-validation() {
     echo -ne "${HWOL_SUMMARY_COLUMN_DELIM}Pass" >> "${HWOL_SUMMARY_FILENAME}"
   fi
 
-  IPERF_OPT=$IPERF_REVERSE_TEST_OPT
-  HWOL_VALIDATION_FILENAME="${HW_OFFLOAD_LOGS_DIR}/${REVERSE_TEST_FILENAME}"
-  echo "== ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} (Reverse) ==" > "${HWOL_VALIDATION_FILENAME}"
-  echo "== ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} (Reverse) =="
+  # Only iperf3 has reverse supported.
+  if [[ "$IPERF_CMD" == *"iperf3"* ]]; then
+    IPERF_OPT=$IPERF_REVERSE_TEST_OPT
+    HWOL_VALIDATION_FILENAME="${HW_OFFLOAD_LOGS_DIR}/${REVERSE_TEST_FILENAME}"
+    echo "== ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} (Reverse) ==" > "${HWOL_VALIDATION_FILENAME}"
+    echo "== ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} (Reverse) =="
 
-  process-vf-rep-stats
-  if [ $? -ne 0 ]; then
-    echo -e "\r\n${RED}FAILED${NC}\r\n"
-    echo -e "${HWOL_SUMMARY_COLUMN_DELIM}Fail" >> "${HWOL_SUMMARY_FILENAME}"
+    process-vf-rep-stats
+    if [ $? -ne 0 ]; then
+      echo -e "\r\n${RED}FAILED${NC}\r\n"
+      echo -e "${HWOL_SUMMARY_COLUMN_DELIM}Fail" >> "${HWOL_SUMMARY_FILENAME}"
+    else
+      echo -e "\r\n${GREEN}SUCCESS${NC}\r\n"
+      echo -e "${HWOL_SUMMARY_COLUMN_DELIM}Pass" >> "${HWOL_SUMMARY_FILENAME}"
+    fi
   else
-    echo -e "\r\n${GREEN}SUCCESS${NC}\r\n"
-    echo -e "${HWOL_SUMMARY_COLUMN_DELIM}Pass" >> "${HWOL_SUMMARY_FILENAME}"
+    echo -e "" >> "${HWOL_SUMMARY_FILENAME}"
   fi
 }
 

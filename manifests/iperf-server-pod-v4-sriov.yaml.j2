@@ -12,7 +12,7 @@ spec:
   - name: ft-iperf-server-pod-v4
     image: {{ test_image }}
     command:
-      - "iperf3"
+      - "{{ iperf_cmd }}"
     args: ["-s", "-p", "{{ iperf_clusterip_pod_svc_port }}"]
     imagePullPolicy: IfNotPresent
     resources:
