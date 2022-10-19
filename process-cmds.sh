@@ -124,6 +124,117 @@ process-iperf() {
   fi
 }
 
+inspect-system-ovs-ovn() {
+  echo "# Gather Debug Info" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "## Basic System Information" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: uname -a" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"uname -a\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: rpm -qa | grep openvswitch" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"rpm -qa | grep openvswitch\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: ip -d link show" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"ip -d link show\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: ip addr show" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"ip addr show\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: ip route" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"ip route\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: ip neigh" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"ip neigh\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: ethtool -i ${TEST_VF_REP}" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"ethtool -i ${TEST_VF_REP}\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: ethtool -i ovn-k8s-mp0" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"ethtool -i ovn-k8s-mp0\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: ethtool -i ovn-k8s-mp0_0" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"ethtool -i ovn-k8s-mp0_0\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: cat /proc/net/nf_conntrack" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"cat /proc/net/nf_conntrack\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "## OvS Information" >> "${HWOL_VALIDATION_FILENAME}"
+  # Workaround: https://bugzilla.redhat.com/show_bug.cgi?id=1803920
+  OPENVSWITCHPID=`kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"cat /var/run/openvswitch/ovs-vswitchd.pid\""`
+  echo "### Command: ovs-vsctl show" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"ovs-vsctl show\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: sudo ovs-appctl dpctl/show" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"sudo ovs-appctl -t /var/run/openvswitch/ovs-vswitchd.${OPENVSWITCHPID}.ctl dpctl/show\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: sudo ovs-appctl dpctl/dump-flows --names -m" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"sudo ovs-appctl -t /var/run/openvswitch/ovs-vswitchd.${OPENVSWITCHPID}.ctl dpctl/dump-flows --names -m\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "## Kernel TC filter Information" >> "${HWOL_VALIDATION_FILENAME}"
+  # Get PF from br-ex
+  PF_NAME=`kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"ovs-vsctl list-ports br-ex | grep -v patch-br-ex\""`
+  echo "NOTE: PF Name is ${PF_NAME}" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s filter show dev ${PF_NAME} ingress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s filter show dev ${PF_NAME} ingress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s filter show dev ${PF_NAME} egress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s filter show dev ${PF_NAME} egress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s filter show dev ${TEST_VF_REP} ingress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s filter show dev ${TEST_VF_REP} ingress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s filter show dev ${TEST_VF_REP} egress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s filter show dev ${TEST_VF_REP} egress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s filter show dev ovn-k8s-mp0_0 ingress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s filter show dev ovn-k8s-mp0_0 ingress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s filter show dev ovn-k8s-mp0_0 egress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s filter show dev ovn-k8s-mp0_0 egress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s filter show dev ovn-k8s-mp0 ingress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s filter show dev ovn-k8s-mp0 ingress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s filter show dev ovn-k8s-mp0 egress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s filter show dev ovn-k8s-mp0 egress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s filter show dev genev_sys_6081 ingress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s filter show dev genev_sys_6081 ingress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s filter show dev genev_sys_6081 egress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s filter show dev genev_sys_6081 egress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s filter show dev br-int ingress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s filter show dev br-int ingress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s filter show dev br-int egress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s filter show dev br-int egress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s filter show dev br-ex ingress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s filter show dev br-ex ingress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s filter show dev br-ex egress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s filter show dev br-ex egress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "## Kernel TC qdisc Information" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s qdisc show dev ${PF_NAME} ingress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s qdisc show dev ${PF_NAME} ingress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s qdisc show dev ${PF_NAME} clsact" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s qdisc show dev ${PF_NAME} clsact\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s qdisc show dev ${TEST_VF_REP} ingress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s qdisc show dev ${TEST_VF_REP} ingress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s qdisc show dev ${TEST_VF_REP} clsact" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s qdisc show dev ${TEST_VF_REP} clsact\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s qdisc show dev ovn-k8s-mp0_0 ingress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s qdisc show dev ovn-k8s-mp0_0 ingress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s qdisc show dev ovn-k8s-mp0_0 clsact" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s qdisc show dev ovn-k8s-mp0_0 clsact\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s qdisc show dev ovn-k8s-mp0 ingress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s qdisc show dev ovn-k8s-mp0 ingress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s qdisc show dev ovn-k8s-mp0 clsact" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s qdisc show dev ovn-k8s-mp0 clsact\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s qdisc show dev genev_sys_6081 ingress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s qdisc show dev genev_sys_6081 ingress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s qdisc show dev genev_sys_6081 clsact" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s qdisc show dev genev_sys_6081 clsact\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s qdisc show dev br-int ingress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s qdisc show dev br-int ingress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s qdisc show dev br-int clsact" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s qdisc show dev br-int clsact\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s qdisc show dev br-ex ingress" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s qdisc show dev br-ex ingress\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "### Command: tc -s qdisc show dev br-ex clsact" >> "${HWOL_VALIDATION_FILENAME}"
+  kubectl exec -n "${FT_NAMESPACE}" "${TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"tc -s qdisc show dev br-ex clsact\"" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "## OVN Information" >> "${HWOL_VALIDATION_FILENAME}"
+  echo "Cannot get OVN information." >> "${HWOL_VALIDATION_FILENAME}"
+  # rpm -qa | grep ^ovn
+  # ovn-nbctl show
+  # ovn-sbctl show
+  # ovn-nbctl lb-list
+  # ovn-nbctl lr-list
+  # ovn-nbctl lr-nat-list rtr
+  # ovn-nbctl lr-lb-list rtr
+  # ovn-nbctl ls-list
+  # ovn-nbctl ls-lb-list ls1
+  # ovn-nbctl ls-lb-list ls2
+}
+
 inspect-vf-rep() {
   # The following VARIABLES are used by this function:
   #     TEST_VF_REP
@@ -221,6 +332,9 @@ process-vf-rep-stats() {
     TEST_TOOLS_POD=${CLIENT_TEST_TOOLS_POD}
     RX_COUNT=0
     inspect-vf-rep
+    if [ "$HWOL_INSPECT_SYSTEM_OVS_OVN" == true ]; then
+      inspect-system-ovs-ovn
+    fi
     clientRetVal=$?
     clientRxCount=${RX_COUNT}
   else
@@ -236,6 +350,9 @@ process-vf-rep-stats() {
     TEST_TOOLS_POD=${SERVER_TEST_TOOLS_POD}
     RX_COUNT=0
     inspect-vf-rep
+    if [ "$HWOL_INSPECT_SYSTEM_OVS_OVN" == true ]; then
+      inspect-system-ovs-ovn
+    fi
     serverRetVal=$?
     serverRxCount=${RX_COUNT}
   else

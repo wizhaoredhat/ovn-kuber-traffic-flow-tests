@@ -455,6 +455,7 @@ Default/Override Values:
     HWOL_THRESHOLD_PKT_COUNT           10000
     HWOL_THRESHOLD_LOW_PKT_RATE        10000000
     HWOL_SUMMARY_COLUMN_DELIM          ;
+    HWOL_INSPECT_SYSTEM_OVS_OVN        false
     IPERF                              false
     IPERF_CMD                          iperf3
     IPERF_TIME                         10
