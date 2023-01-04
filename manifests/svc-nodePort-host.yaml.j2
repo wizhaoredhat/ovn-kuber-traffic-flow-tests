@@ -26,8 +26,12 @@ metadata:
 spec:
   type: NodePort
   ports:
-    - name: ft-iperf-server-host-node-v4-{{ iperf_clusterip_host_svc_port }}
+    - name: ft-iperf-server-host-node-tcp-v4-{{ iperf_clusterip_host_svc_port }}
       protocol: TCP
+      port: {{ iperf_clusterip_host_svc_port }}
+      nodePort: {{ iperf_nodeport_host_svc_port }}
+    - name: ft-iperf-server-host-node-udp-v4-{{ iperf_clusterip_host_svc_port }}
+      protocol: UDP
       port: {{ iperf_clusterip_host_svc_port }}
       nodePort: {{ iperf_nodeport_host_svc_port }}
   selector:

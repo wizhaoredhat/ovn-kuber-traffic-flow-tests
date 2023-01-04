@@ -25,8 +25,11 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - name: ft-iperf-server-clusterip-v4-{{ iperf_clusterip_host_svc_port }}
+    - name: ft-iperf-server-clusterip-tcp-v4-{{ iperf_clusterip_host_svc_port }}
       protocol: TCP
+      port: {{ iperf_clusterip_host_svc_port }}
+    - name: ft-iperf-server-clusterip-udp-v4-{{ iperf_clusterip_host_svc_port }}
+      protocol: UDP
       port: {{ iperf_clusterip_host_svc_port }}
   selector:
     pod-name: ft-iperf-server-host-v4
