@@ -450,7 +450,7 @@ process-vf-rep-stats() {
 }
 
 process-hw-offload-validation() {
-  # The following VARIABLES are used by this function:
+  # The following VARIABLES are used by this function and following functions:
   #     TEST_CLIENT_NODE
   #     TEST_SERVER_NODE
   #     TEST_CLIENT_POD
@@ -494,11 +494,34 @@ process-hw-offload-validation() {
   echo "=== HWOL ==="
   touch ${HWOL_SUMMARY_FILENAME}
 
-  IPERF_OPT=$IPERF_FORWARD_TEST_OPT
-  HWOL_VALIDATION_FILENAME="${HW_OFFLOAD_LOGS_DIR}/${FORWARD_TEST_FILENAME}"
-  echo "== ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} ==" > "${HWOL_VALIDATION_FILENAME}"
-  echo "== ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} =="
-  echo -ne "${TEST_FILENAME}" >> "${HWOL_SUMMARY_FILENAME}"
+  PROTOCOL_NAME="TCP"
+  PROTOCAL_OPT=""
+  process-hw-offload-validation-protocol
+
+  PROTOCOL_NAME="UDP"
+  PROTOCAL_OPT=$IPERF_UDP_TEST_OPT
+  process-hw-offload-validation-protocol
+}
+
+process-hw-offload-validation-protocol() {
+  # The following VARIABLES are used by this function:
+  #     TEST_CLIENT_NODE
+  #     TEST_SERVER_NODE
+  #     TEST_CLIENT_POD
+  #     FORWARD_TEST_FILENAME
+  #     REVERSE_TEST_FILENAME
+  #     TEST_SERVER_IPERF_DST
+  #     TEST_SERVER_IPERF_DST_PORT
+  #     IPERF_FORWARD_TEST_OPT
+  #     IPERF_REVERSE_TEST_OPT
+  #     PROTOCOL_NAME
+  #     PROTOCAL_OPT
+
+  IPERF_OPT="$IPERF_FORWARD_TEST_OPT $PROTOCAL_OPT"
+  HWOL_VALIDATION_FILENAME="${HW_OFFLOAD_LOGS_DIR}/${PROTOCOL_NAME}-${FORWARD_TEST_FILENAME}"
+  echo "== ${PROTOCOL_NAME} ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} ==" > "${HWOL_VALIDATION_FILENAME}"
+  echo "== ${PROTOCOL_NAME} ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} =="
+  echo -ne "${PROTOCOL_NAME}-${TEST_FILENAME}" >> "${HWOL_SUMMARY_FILENAME}"
 
   if [ "$CLIENT_SERVER_SAME_NODE" == false ]; then
     CLIENT_TEST_TOOLS_POD=$TOOLS_CLIENT_POD
@@ -534,10 +557,10 @@ process-hw-offload-validation() {
 
   # Only iperf3 has reverse supported.
   if [[ "$IPERF_CMD" == *"iperf3"* ]]; then
-    IPERF_OPT=$IPERF_REVERSE_TEST_OPT
-    HWOL_VALIDATION_FILENAME="${HW_OFFLOAD_LOGS_DIR}/${REVERSE_TEST_FILENAME}"
-    echo "== ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} (Reverse) ==" > "${HWOL_VALIDATION_FILENAME}"
-    echo "== ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} (Reverse) =="
+    IPERF_OPT="$IPERF_REVERSE_TEST_OPT $PROTOCAL_OPT"
+    HWOL_VALIDATION_FILENAME="${HW_OFFLOAD_LOGS_DIR}/${PROTOCOL_NAME}-${REVERSE_TEST_FILENAME}"
+    echo "== ${PROTOCOL_NAME} ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} (Reverse) ==" > "${HWOL_VALIDATION_FILENAME}"
+    echo "== ${PROTOCOL_NAME} ${MY_CLUSTER}:${TEST_CLIENT_NODE} -> ${TEST_SERVER_CLUSTER}:${TEST_SERVER_NODE} (Reverse) =="
 
     process-vf-rep-stats
     if [ $? -ne 0 ]; then
