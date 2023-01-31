@@ -77,9 +77,11 @@ process-iperf() {
   PROTOCAL_OPT=""
   process-iperf-protocol
 
-  PROTOCOL_NAME="UDP"
-  PROTOCAL_OPT=$IPERF_UDP_TEST_OPT
-  process-iperf-protocol
+  if [ "$IPERF_RUN_UDP_TESTS" == true ]; then
+    PROTOCOL_NAME="UDP"
+    PROTOCAL_OPT=$IPERF_UDP_TEST_OPT
+    process-iperf-protocol
+  fi
 }
 
 process-iperf-protocol() {
@@ -498,9 +500,11 @@ process-hw-offload-validation() {
   PROTOCAL_OPT=""
   process-hw-offload-validation-protocol
 
-  PROTOCOL_NAME="UDP"
-  PROTOCAL_OPT=$IPERF_UDP_TEST_OPT
-  process-hw-offload-validation-protocol
+  if [ "$IPERF_RUN_UDP_TESTS" == true ]; then
+    PROTOCOL_NAME="UDP"
+    PROTOCAL_OPT=$IPERF_UDP_TEST_OPT
+    process-hw-offload-validation-protocol
+  fi
 }
 
 process-hw-offload-validation-protocol() {
