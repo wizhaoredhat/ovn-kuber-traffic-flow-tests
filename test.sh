@@ -410,6 +410,7 @@ if [ "$TEST_CASE" == 0 ] || [ "$TEST_CASE" == 4 ] && [ "$FT_HOSTONLY" == false ]
   CLIENT_HOSTBACKED_POD=false
   SERVER_HOSTBACKED_POD=true
   CLIENT_SERVER_SAME_NODE=true
+  UDP_BIND_POD_ENABLED=true
 
   if [ "$CURL" == true ]; then
     TEST_SERVER_RSP=$HOST_SERVER_STRING
@@ -466,6 +467,7 @@ if [ "$TEST_CASE" == 0 ] || [ "$TEST_CASE" == 4 ] && [ "$FT_HOSTONLY" == false ]
     process-ovn-trace
   fi
 
+  UDP_BIND_POD_ENABLED=false
 
   echo
   echo "*** 4-b: Pod -> Cluster IP Service traffic (Host Backend - Different Node) ***"
@@ -690,6 +692,7 @@ if [ "$TEST_CASE" == 0 ] || [ "$TEST_CASE" == 6 ] && [ "$FT_HOSTONLY" == false ]
   CLIENT_HOSTBACKED_POD=false
   SERVER_HOSTBACKED_POD=true
   CLIENT_SERVER_SAME_NODE=true
+  UDP_BIND_POD_ENABLED=true
 
   if [ "$CURL" == true ]; then
     TEST_SERVER_RSP=$HOST_SERVER_STRING
@@ -737,6 +740,7 @@ if [ "$TEST_CASE" == 0 ] || [ "$TEST_CASE" == 6 ] && [ "$FT_HOSTONLY" == false ]
     process-ovn-trace
   fi
 
+  UDP_BIND_POD_ENABLED=false
 
   echo
   echo "*** 6-b: Pod -> NodePort Service traffic (Host Backend - Different Node) ***"
