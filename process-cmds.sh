@@ -64,6 +64,57 @@ process-curl() {
   echo "${TMP_OUTPUT}" | grep -cq "${TEST_SERVER_RSP}" && echo -e "\r\n${GREEN}SUCCESS${NC}\r\n" || echo -e "\r\n${RED}FAILED${NC}\r\n"
 }
 
+maybe-set-UDP-bind() {
+  if [ "$UDP_BIND_POD_ENABLED" == true ]; then
+    OLD_TEST_SERVER_IPERF_DST=$TEST_SERVER_IPERF_DST
+    kubectl delete -f ./manifests/yamls/iperf-server-pod-v4-host.yaml
+    kubectl apply -f ./manifests/yamls/iperf-server-pod-v4-host-bind.yaml
+    retry=0
+    while : ; do
+        sleep 5
+        IPERF_SERVER_HOST_POD_IP=$(kubectl get "pod/${IPERF_SERVER_HOST_POD_NAME}" -o jsonpath='{.status.podIP}')
+        IPERF_SERVER_HOST_STATUS=$(kubectl get "pod/${IPERF_SERVER_HOST_POD_NAME}" -o jsonpath='{.status.phase}')
+        if [[ "$IPERF_SERVER_HOST_STATUS" == "containerCreating" && "${retry}" -gt 60 ]]; then
+            echo "Hit max retries - pod failed to initialize"
+	    break
+        elif [[ "$IPERF_SERVER_HOST_STATUS" == "Running" ]]; then
+            break
+        else
+            echo "Retrying attempt retry=${retry} IPERF_SERVER_POD_IP=${IPERF_SERVER_HOST_POD_IP}"
+            retry=$((retry+1))
+        fi
+    done
+
+    IPERF_SERVER_HOST_IP_BIND=$(kubectl get "pod/${IPERF_SERVER_HOST_POD_NAME}" -o jsonpath='{.status.podIP}')
+    TEST_SERVER_IPERF_DST=$IPERF_SERVER_HOST_IP_BIND
+  fi
+}
+
+maybe-cleanup-UDP-resources() {
+    if [ "$UDP_BIND_POD_ENABLED" == true ]; then
+        TEST_SERVER_IPERF_DST=$OLD_TEST_SERVER_IPERF_DST
+        kubectl delete -f ./manifests/yamls/iperf-server-pod-v4-host-bind.yaml
+        kubectl apply -f ./manifests/yamls/iperf-server-pod-v4-host.yaml
+	retry=0
+    	while : ; do
+    	    sleep 5
+    	    TMP_GET_PODS_STR=$(kubectl get pods -n ${FT_NAMESPACE} -o wide)
+    	    IPERF_SERVER_HOST_POD_IP=$(kubectl get "pod/${IPERF_SERVER_HOST_POD_NAME}" -o jsonpath='{.status.podIP}')
+    	    IPERF_SERVER_HOST_STATUS=$(kubectl get "pod/${IPERF_SERVER_HOST_POD_NAME}" -o jsonpath='{.status.phase}')
+    	    if [[ "$IPERF_SERVER_HOST_STATUS" == "containerCreating" && "${retry}" -gt 60 ]]; then
+                echo "Hit max retries - pod failed to initialize" 
+	        break
+    	    elif [[ "$IPERF_SERVER_HOST_STATUS" == "Running" ]]; then
+                echo "Pod successfully created"
+	        break
+    	    else
+                echo "Retrying attempt retry=${retry} IPERF_SERVER_POD_IP=${IPERF_SERVER_HOST_POD_IP}"
+                retry=$((retry+1))
+            fi
+        done
+    fi
+}
+
 process-iperf() {
   # The following VARIABLES are used by this function and following functions:
   #     TEST_CLIENT_POD
@@ -78,9 +129,11 @@ process-iperf() {
   process-iperf-protocol
 
   if [ "$IPERF_RUN_UDP_TESTS" == true ]; then
+    maybe-set-UDP-bind 
     PROTOCOL_NAME="UDP"
     PROTOCAL_OPT=$IPERF_UDP_TEST_OPT
     process-iperf-protocol
+    maybe-cleanup-UDP-resources
   fi
 }
 
@@ -501,9 +554,11 @@ process-hw-offload-validation() {
   process-hw-offload-validation-protocol
 
   if [ "$IPERF_RUN_UDP_TESTS" == true ]; then
+    maybe-set-UDP-bind
     PROTOCOL_NAME="UDP"
     PROTOCAL_OPT=$IPERF_UDP_TEST_OPT
     process-hw-offload-validation-protocol
+    maybe-cleanup-UDP-resources
   fi
 }
 
