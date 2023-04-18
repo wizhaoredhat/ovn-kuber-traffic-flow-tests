@@ -23,7 +23,7 @@ FT_MC_CO_SERVER_LABEL=${FT_MC_CO_SERVER_LABEL:-submariner.io/gateway=true}
 # Launch specific variables
 NET_ATTACH_DEF_NAME=${NET_ATTACH_DEF_NAME:-ftnetattach}
 SRIOV_RESOURCE_NAME=${SRIOV_RESOURCE_NAME:-openshift.io/mlnx_bf}
-TEST_IMAGE=${TEST_IMAGE:-quay.io/billy99/ft-base-image:0.9}
+TEST_IMAGE=${TEST_IMAGE:-quay.io/wizhao/ft-base-image:0.9}
 
 
 # Clean specific variables
