@@ -98,7 +98,6 @@ maybe-cleanup-UDP-resources() {
 	retry=0
     	while : ; do
     	    sleep 5
-    	    TMP_GET_PODS_STR=$(kubectl get pods -n ${FT_NAMESPACE} -o wide)
     	    IPERF_SERVER_HOST_POD_IP=$(kubectl get "pod/${IPERF_SERVER_HOST_POD_NAME}" -o jsonpath='{.status.podIP}')
     	    IPERF_SERVER_HOST_STATUS=$(kubectl get "pod/${IPERF_SERVER_HOST_POD_NAME}" -o jsonpath='{.status.phase}')
     	    if [[ "$IPERF_SERVER_HOST_STATUS" == "containerCreating" && "${retry}" -gt 60 ]]; then

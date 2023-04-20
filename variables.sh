@@ -466,7 +466,7 @@ query-dynamic-data() {
   # Determine Local and Remote Nodes
   #
   if [ "$FT_CLIENTONLY" == false ] ; then
-    SERVER_POD_NODE=$(kubectl get pods -n ${FT_NAMESPACE} -o wide | grep $HTTP_SERVER_HOST_POD_NAME  | awk -F' ' '{print $7}')
+    SERVER_POD_NODE=$(kubectl get pods -n ${FT_NAMESPACE} $HTTP_SERVER_HOST_POD_NAME -o jsonpath='{.spec.nodeName}')
     SVCNAME_CLUSTER=$MY_CLUSTER
 
     # Local Client Node is the same Node Server is running on.
@@ -574,11 +574,10 @@ query-dynamic-data() {
   # Determine IP Addresses and Ports
   #
   if [ "$FT_CLIENTONLY" == false ] ; then
-    TMP_GET_PODS_STR=$(kubectl get pods -n ${FT_NAMESPACE} -o wide)
     TMP_GET_SERVICES_STR=$(kubectl get services -n ${FT_NAMESPACE})
 
-    HTTP_SERVER_HOST_IP=$(echo "${TMP_GET_PODS_STR}" | grep $HTTP_SERVER_HOST_POD_NAME  | awk -F' ' '{print $6}')
-    IPERF_SERVER_HOST_IP=$(echo "${TMP_GET_PODS_STR}" | grep $IPERF_SERVER_HOST_POD_NAME  | awk -F' ' '{print $6}')
+    HTTP_SERVER_HOST_IP=$(kubectl get pod $HTTP_SERVER_HOST_POD_NAME -n ${FT_NAMESPACE} -o jsonpath='{.status.hostIP}')
+    IPERF_SERVER_HOST_IP=$(kubectl get pod $IPERF_SERVER_HOST_POD_NAME -n ${FT_NAMESPACE} -o jsonpath='{.status.hostIP}')
 
     HTTP_CLUSTERIP_HOST_SVC_IPV4_LIST=($(echo "${TMP_GET_SERVICES_STR}" | grep $HTTP_CLUSTERIP_HOST_SVC_NAME | awk -F' ' '{print $3}'))
     HTTP_CLUSTERIP_HOST_SVC_PORT=$(echo "${TMP_GET_SERVICES_STR}" | grep $HTTP_CLUSTERIP_HOST_SVC_NAME | awk -F' ' '{print $5}' | awk -F/ '{print $1}')
@@ -597,8 +596,8 @@ query-dynamic-data() {
     IPERF_NODEPORT_HOST_SVC_CLUSTER_LIST=($MY_CLUSTER)
 
     if [ "$FT_HOSTONLY" == false ]; then
-      HTTP_SERVER_POD_IP=$(echo "${TMP_GET_PODS_STR}" | grep $HTTP_SERVER_POD_NAME  | awk -F' ' '{print $6}')
-      IPERF_SERVER_POD_IP=$(echo "${TMP_GET_PODS_STR}" | grep $IPERF_SERVER_POD_NAME  | awk -F' ' '{print $6}')
+      HTTP_SERVER_POD_IP=$(kubectl get pod $HTTP_SERVER_POD_NAME -n ${FT_NAMESPACE} -o jsonpath='{.status.hostIP}')
+      IPERF_SERVER_POD_IP=$(kubectl get pod $IPERF_SERVER_POD_NAME -n ${FT_NAMESPACE} -o jsonpath='{.status.hostIP}')
 
       HTTP_CLUSTERIP_POD_SVC_IPV4_LIST=($(echo "${TMP_GET_SERVICES_STR}" | grep $HTTP_CLUSTERIP_POD_SVC_NAME | awk -F' ' '{print $3}'))
       HTTP_CLUSTERIP_POD_SVC_PORT=$(echo "${TMP_GET_SERVICES_STR}" | grep $HTTP_CLUSTERIP_POD_SVC_NAME | awk -F' ' '{print $5}' | awk -F/ '{print $1}')
