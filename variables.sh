@@ -576,8 +576,8 @@ query-dynamic-data() {
   if [ "$FT_CLIENTONLY" == false ] ; then
     TMP_GET_SERVICES_STR=$(kubectl get services -n ${FT_NAMESPACE})
 
-    HTTP_SERVER_HOST_IP=$(kubectl get pod $HTTP_SERVER_HOST_POD_NAME -n ${FT_NAMESPACE} -o jsonpath='{.status.hostIP}')
-    IPERF_SERVER_HOST_IP=$(kubectl get pod $IPERF_SERVER_HOST_POD_NAME -n ${FT_NAMESPACE} -o jsonpath='{.status.hostIP}')
+    HTTP_SERVER_HOST_IP=$(kubectl get pod $HTTP_SERVER_HOST_POD_NAME -n ${FT_NAMESPACE} -o jsonpath='{.status.podIP}')
+    IPERF_SERVER_HOST_IP=$(kubectl get pod $IPERF_SERVER_HOST_POD_NAME -n ${FT_NAMESPACE} -o jsonpath='{.status.podIP}')
 
     HTTP_CLUSTERIP_HOST_SVC_IPV4_LIST=($(echo "${TMP_GET_SERVICES_STR}" | grep $HTTP_CLUSTERIP_HOST_SVC_NAME | awk -F' ' '{print $3}'))
     HTTP_CLUSTERIP_HOST_SVC_PORT=$(echo "${TMP_GET_SERVICES_STR}" | grep $HTTP_CLUSTERIP_HOST_SVC_NAME | awk -F' ' '{print $5}' | awk -F/ '{print $1}')
@@ -596,8 +596,8 @@ query-dynamic-data() {
     IPERF_NODEPORT_HOST_SVC_CLUSTER_LIST=($MY_CLUSTER)
 
     if [ "$FT_HOSTONLY" == false ]; then
-      HTTP_SERVER_POD_IP=$(kubectl get pod $HTTP_SERVER_POD_NAME -n ${FT_NAMESPACE} -o jsonpath='{.status.hostIP}')
-      IPERF_SERVER_POD_IP=$(kubectl get pod $IPERF_SERVER_POD_NAME -n ${FT_NAMESPACE} -o jsonpath='{.status.hostIP}')
+      HTTP_SERVER_POD_IP=$(kubectl get pod $HTTP_SERVER_POD_NAME -n ${FT_NAMESPACE} -o jsonpath='{.status.podIP}')
+      IPERF_SERVER_POD_IP=$(kubectl get pod $IPERF_SERVER_POD_NAME -n ${FT_NAMESPACE} -o jsonpath='{.status.podIP}')
 
       HTTP_CLUSTERIP_POD_SVC_IPV4_LIST=($(echo "${TMP_GET_SERVICES_STR}" | grep $HTTP_CLUSTERIP_POD_SVC_NAME | awk -F' ' '{print $3}'))
       HTTP_CLUSTERIP_POD_SVC_PORT=$(echo "${TMP_GET_SERVICES_STR}" | grep $HTTP_CLUSTERIP_POD_SVC_NAME | awk -F' ' '{print $5}' | awk -F/ '{print $1}')
