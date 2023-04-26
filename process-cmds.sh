@@ -416,22 +416,24 @@ process-vf-rep-stats() {
     echo -e "The client VF Representor ${CLIENT_TEST_VF_REP} does not exist!"
   fi
 
-  echo -e "= Server Pod VF Representor Results =" >> "${HWOL_VALIDATION_FILENAME}"
-  echo -e "= Server Pod VF Representor Results ="
-  kubectl exec -n "${FT_NAMESPACE}" "${SERVER_TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"ethtool -i ${SERVER_TEST_VF_REP}\"" >> "${HWOL_VALIDATION_FILENAME}"
-  if [ $? -eq 0 ]; then
-    TEST_VF_REP=${SERVER_TEST_VF_REP}
-    TEST_TOOLS_POD=${SERVER_TEST_TOOLS_POD}
-    RX_COUNT=0
-    inspect-vf-rep
-    if [ "$HWOL_INSPECT_SYSTEM_OVS_OVN" == true ]; then
-      inspect-system-ovs-ovn
+  if [ "${SKIP_SERVER_POD_VF_REP_RESULTS}" == false ]; then
+    echo -e "= Server Pod VF Representor Results =" >> "${HWOL_VALIDATION_FILENAME}"
+    echo -e "= Server Pod VF Representor Results ="
+    kubectl exec -n "${FT_NAMESPACE}" "${SERVER_TEST_TOOLS_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"ethtool -i ${SERVER_TEST_VF_REP}\"" >> "${HWOL_VALIDATION_FILENAME}"
+    if [ $? -eq 0 ]; then
+      TEST_VF_REP=${SERVER_TEST_VF_REP}
+      TEST_TOOLS_POD=${SERVER_TEST_TOOLS_POD}
+      RX_COUNT=0
+      inspect-vf-rep
+      if [ "$HWOL_INSPECT_SYSTEM_OVS_OVN" == true ]; then
+        inspect-system-ovs-ovn
+      fi
+      serverRetVal=$?
+      serverRxCount=${RX_COUNT}
+    else
+      echo -e "The server VF Representor ${SERVER_TEST_VF_REP} does not exist!" >> "${HWOL_VALIDATION_FILENAME}"
+      echo -e "The server VF Representor ${SERVER_TEST_VF_REP} does not exist!"
     fi
-    serverRetVal=$?
-    serverRxCount=${RX_COUNT}
-  else
-    echo -e "The server VF Representor ${SERVER_TEST_VF_REP} does not exist!" >> "${HWOL_VALIDATION_FILENAME}"
-    echo -e "The server VF Representor ${SERVER_TEST_VF_REP} does not exist!"
   fi
 
   # Wait for Iperf to finish
@@ -520,11 +522,13 @@ process-hw-offload-validation() {
   TOOLS_CLIENT_POD=$(echo "${TMP_OUTPUT}" | grep -w "${TEST_CLIENT_NODE}" | awk -F' ' '{print $1}')
   TOOLS_SERVER_POD=$(echo "${TMP_OUTPUT}" | grep -w "${TEST_SERVER_NODE}" | awk -F' ' '{print $1}')
 
-  [ "$FT_DEBUG" == true ] && echo "kubectl exec -n \"${FT_NAMESPACE}\" \"${TOOLS_SERVER_POD}\" -- /bin/sh -c \"chroot /host /bin/bash -c \"crictl ps -a --name=${IPERF_SERVER_POD_NAME} -o json | jq -r \".containers[].podSandboxId\"\"\""
-  TEST_SERVER_IPERF_SERVER_PODID=`kubectl exec -n "${FT_NAMESPACE}" "${TOOLS_SERVER_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"crictl ps -a --name=${IPERF_SERVER_POD_NAME} -o json | jq -r \".containers[].podSandboxId\"\""`
-  [ "$FT_DEBUG" == true ] && echo "kubectl exec -n \"${FT_NAMESPACE}\" \"${TOOLS_SERVER_POD}\" -- /bin/sh -c \"chroot /host /bin/bash -c \"crictl ps -a --name=${CLIENT_POD_NAME_PREFIX} -o json | jq -r \".containers[].podSandboxId\"\"\""
-  TEST_SERVER_CLIENT_PODID=`kubectl exec -n "${FT_NAMESPACE}" "${TOOLS_SERVER_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"crictl ps -a --name=${CLIENT_POD_NAME_PREFIX} -o json | jq -r \".containers[].podSandboxId\"\""`
-  [ "$FT_DEBUG" == true ] && echo "kubectl exec -n \"${FT_NAMESPACE}\" \"${TOOLS_CLIENT_POD}\" -- /bin/sh -c \"chroot /host /bin/bash -c \"crictl ps -a --name=${CLIENT_POD_NAME_PREFIX} -o json | jq -r \".containers[].podSandboxId\"\"\""
+  if [ "${SKIP_SERVER_POD_VF_REP_RESULTS}" == false ]; then
+    [ "$FT_DEBUG" == true ] && echo "kubectl exec -n \"${FT_NAMESPACE}\" \"${TOOLS_SERVER_POD}\" -- /bin/sh -c \"chroot /host /bin/bash -c \"crictl ps -a --name=${IPERF_SERVER_POD_NAME} -o json | jq -r \".containers[].podSandboxId\"\"\""
+    TEST_SERVER_IPERF_SERVER_PODID=`kubectl exec -n "${FT_NAMESPACE}" "${TOOLS_SERVER_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"crictl ps -a --name=${IPERF_SERVER_POD_NAME} -o json | jq -r \".containers[].podSandboxId\"\""`
+    [ "$FT_DEBUG" == true ] && echo "kubectl exec -n \"${FT_NAMESPACE}\" \"${TOOLS_SERVER_POD}\" -- /bin/sh -c \"chroot /host /bin/bash -c \"crictl ps -a --name=${CLIENT_POD_NAME_PREFIX} -o json | jq -r \".containers[].podSandboxId\"\"\""
+    TEST_SERVER_CLIENT_PODID=`kubectl exec -n "${FT_NAMESPACE}" "${TOOLS_SERVER_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"crictl ps -a --name=${CLIENT_POD_NAME_PREFIX} -o json | jq -r \".containers[].podSandboxId\"\""`
+  fi
+    [ "$FT_DEBUG" == true ] && echo "kubectl exec -n \"${FT_NAMESPACE}\" \"${TOOLS_CLIENT_POD}\" -- /bin/sh -c \"chroot /host /bin/bash -c \"crictl ps -a --name=${CLIENT_POD_NAME_PREFIX} -o json | jq -r \".containers[].podSandboxId\"\"\""
   TEST_CLIENT_CLIENT_PODID=`kubectl exec -n "${FT_NAMESPACE}" "${TOOLS_CLIENT_POD}" -- /bin/sh -c "chroot /host /bin/bash -c \"crictl ps -a --name=${CLIENT_POD_NAME_PREFIX} -o json | jq -r \".containers[].podSandboxId\"\""`
 
   TEST_SERVER_IPERF_SERVER_VF_REP=${TEST_SERVER_IPERF_SERVER_PODID::15}
@@ -544,7 +548,6 @@ process-hw-offload-validation() {
     echo "  TEST_CLIENT_CLIENT_VF_REP=${TEST_CLIENT_CLIENT_VF_REP}"
     echo "================================================"
   fi
-
   echo "=== HWOL ==="
   touch ${HWOL_SUMMARY_FILENAME}
 

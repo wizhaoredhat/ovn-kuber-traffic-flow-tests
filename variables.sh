@@ -24,6 +24,7 @@ FT_MC_CO_SERVER_LABEL=${FT_MC_CO_SERVER_LABEL:-submariner.io/gateway=true}
 NET_ATTACH_DEF_NAME=${NET_ATTACH_DEF_NAME:-ftnetattach}
 SRIOV_RESOURCE_NAME=${SRIOV_RESOURCE_NAME:-openshift.io/mlnx_bf}
 TEST_IMAGE=${TEST_IMAGE:-quay.io/wizhao/ft-base-image:0.9}
+IPERF3_SERVER_NAME="external-iperf3-server"
 
 
 # Clean specific variables
@@ -47,6 +48,7 @@ IPERF_FORWARD_TEST_OPT=${IPERF_FORWARD_TEST_OPT:-""}
 IPERF_REVERSE_TEST_OPT=${IPERF_REVERSE_TEST_OPT:-"-R"}
 IPERF_UDP_TEST_OPT=${IPERF_UDP_TEST_OPT:-"-u -b 25G"}
 IPERF_RUN_UDP_TESTS=${IPERF_RUN_UDP_TESTS:-false}
+SKIP_SERVER_POD_VF_REP_RESULTS=${SKIP_SERVER_POD_VF_REP_RESULTS:-false}
 # Trace Control
 OVN_TRACE=${OVN_TRACE:-false}
 OVN_TRACE_CMD=${OVN_TRACE_CMD:-./ovnkube-trace -loglevel=5 -tcp}

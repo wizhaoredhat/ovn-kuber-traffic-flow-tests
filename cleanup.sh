@@ -85,3 +85,4 @@ if [ "$CLEAN_ALL" == true ]; then
   rm -rf hwol-logs/*.txt
   rm -rf ovn-traces/*.txt
 fi
+podman stop $IPERF3_SERVER_NAME
