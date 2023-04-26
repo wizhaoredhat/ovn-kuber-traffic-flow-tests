@@ -77,5 +77,5 @@ if [ "$FT_CLIENTONLY" == false ]; then
 fi
 kubectl apply -f ./manifests/yamls/client-daemonSet-host.yaml
 kubectl apply -f ./manifests/yamls/tools-daemonSet.yaml
-
+podman run -itd  --rm -p $IPERF_CLUSTERIP_POD_SVC_PORT --entrypoint iperf3 --name=$IPERF3_SERVER_NAME $TEST_IMAGE -s
 manage_multi_cluster
