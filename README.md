@@ -152,7 +152,7 @@ cd ~/src/ovn-kuber-traffic-flow-tests/
 ./launch.sh
 ```
 It should be noted that `ft-iperf-server-host-v4` gets deleted and remade to bind to the
-br-ex interface for UDP tests 4a and 6a. After these 2 UDP tests get run the new 
+br-ex interface for UDP tests 4a and 6a. After these 2 UDP tests get run the new
 `ft-iperf-server-host-v4` pod gets deleted and the original is applied once more.
 
 #### Pin Servers to Given Node
@@ -456,7 +456,8 @@ Default/Override Values:
     HWOL_FLOW_LEARNING_TIME            30
     HWOL_TCPDUMP_RUNTIME               30
     HWOL_THRESHOLD_PKT_COUNT           10000
-    HWOL_THRESHOLD_LOW_PKT_RATE        1000000000
+    HWOL_TCP_THRESHOLD_LOW_PKT_RATE    1000000000
+    HWOL_UDP_THRESHOLD_LOW_PKT_RATE    500000
     HWOL_SUMMARY_COLUMN_DELIM          ;
     HWOL_INSPECT_SYSTEM_OVS_OVN        false
     IPERF                              false

@@ -101,7 +101,7 @@ maybe-cleanup-UDP-resources() {
     	    IPERF_SERVER_HOST_POD_IP=$(kubectl get "pod/${IPERF_SERVER_HOST_POD_NAME}" -o jsonpath='{.status.podIP}')
     	    IPERF_SERVER_HOST_STATUS=$(kubectl get "pod/${IPERF_SERVER_HOST_POD_NAME}" -o jsonpath='{.status.phase}')
     	    if [[ "$IPERF_SERVER_HOST_STATUS" == "containerCreating" && "${retry}" -gt 60 ]]; then
-                echo "Hit max retries - pod failed to initialize" 
+                echo "Hit max retries - pod failed to initialize"
 	        break
     	    elif [[ "$IPERF_SERVER_HOST_STATUS" == "Running" ]]; then
                 echo "Pod successfully created"
@@ -125,12 +125,14 @@ process-iperf() {
   #     PROTOCAL_OPT
   PROTOCOL_NAME="TCP"
   PROTOCAL_OPT=""
+  HWOL_THRESHOLD_LOW_PKT_RATE=$HWOL_TCP_THRESHOLD_LOW_PKT_RATE
   process-iperf-protocol
 
   if [ "$IPERF_RUN_UDP_TESTS" == true ]; then
-    maybe-set-UDP-bind 
+    maybe-set-UDP-bind
     PROTOCOL_NAME="UDP"
     PROTOCAL_OPT=$IPERF_UDP_TEST_OPT
+    HWOL_THRESHOLD_LOW_PKT_RATE=$HWOL_UDP_THRESHOLD_LOW_PKT_RATE
     process-iperf-protocol
     maybe-cleanup-UDP-resources
   fi
