@@ -108,6 +108,14 @@ generate_yamls() {
   iperf_clusterip_host_svc_port=${IPERF_CLUSTERIP_HOST_SVC_PORT} \
   j2 "./manifests/iperf-server-pod-v4-host.yaml.j2" -o "./manifests/yamls/iperf-server-pod-v4-host.yaml"
 
+  # iperf-server-pod-v4-host-bind.yaml
+  namespace=${FT_NAMESPACE} \
+  test_image=${TEST_IMAGE} \
+  iperf_cmd=${IPERF_CMD} \
+  iperf_clusterip_host_svc_port=${IPERF_CLUSTERIP_HOST_SVC_PORT} \
+  iperf_server_pod_ip=${BIND_IP} \
+  j2 "./manifests/iperf-server-pod-v4-host-bind.yaml.j2" -o "./manifests/yamls/iperf-server-pod-v4-host-bind.yaml"
+
   # iperf-server-pod-v4-sriov.yaml
   namespace=${FT_NAMESPACE} \
   net_attach_def_name=${NET_ATTACH_DEF_NAME} \

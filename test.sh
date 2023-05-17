@@ -410,6 +410,7 @@ if [ "$TEST_CASE" == 0 ] || [ "$TEST_CASE" == 4 ] && [ "$FT_HOSTONLY" == false ]
   CLIENT_HOSTBACKED_POD=false
   SERVER_HOSTBACKED_POD=true
   CLIENT_SERVER_SAME_NODE=true
+  UDP_BIND_POD_ENABLED=true
 
   if [ "$CURL" == true ]; then
     TEST_SERVER_RSP=$HOST_SERVER_STRING
@@ -466,6 +467,7 @@ if [ "$TEST_CASE" == 0 ] || [ "$TEST_CASE" == 4 ] && [ "$FT_HOSTONLY" == false ]
     process-ovn-trace
   fi
 
+  UDP_BIND_POD_ENABLED=false
 
   echo
   echo "*** 4-b: Pod -> Cluster IP Service traffic (Host Backend - Different Node) ***"
@@ -690,6 +692,7 @@ if [ "$TEST_CASE" == 0 ] || [ "$TEST_CASE" == 6 ] && [ "$FT_HOSTONLY" == false ]
   CLIENT_HOSTBACKED_POD=false
   SERVER_HOSTBACKED_POD=true
   CLIENT_SERVER_SAME_NODE=true
+  UDP_BIND_POD_ENABLED=true
 
   if [ "$CURL" == true ]; then
     TEST_SERVER_RSP=$HOST_SERVER_STRING
@@ -737,6 +740,7 @@ if [ "$TEST_CASE" == 0 ] || [ "$TEST_CASE" == 6 ] && [ "$FT_HOSTONLY" == false ]
     process-ovn-trace
   fi
 
+  UDP_BIND_POD_ENABLED=false
 
   echo
   echo "*** 6-b: Pod -> NodePort Service traffic (Host Backend - Different Node) ***"
@@ -1595,14 +1599,19 @@ if [ "$TEST_CASE" == 0 ] || [ "$TEST_CASE" == 13 ]; then
     echo "*** 13-a: Pod -> External Network ***"
     echo
 
+    TEST_CLIENT_POD=$LOCAL_CLIENT_POD
+    TEST_CLIENT_NODE=$LOCAL_CLIENT_NODE
     TEST_SERVER_CLUSTER=$EXTERNAL
     TEST_SERVER_NODE=$EXTERNAL
     TEST_FILENAME="13-a-pod2external.txt"
+    FORWARD_TEST_FILENAME="${TEST_FILENAME:0:5}client-server-${TEST_FILENAME:5}"
+    REVERSE_TEST_FILENAME="${TEST_FILENAME:0:5}server-client-${TEST_FILENAME:5}"
+    CLIENT_HOSTBACKED_POD=false
+    SERVER_HOSTBACKED_POD=false
+    CLIENT_SERVER_SAME_NODE=false
+    SKIP_SERVER_POD_VF_REP_RESULTS=true
 
-    for i in "${!REMOTE_CLIENT_POD_LIST[@]}"
-    do
-      TEST_CLIENT_POD=${REMOTE_CLIENT_POD_LIST[$i]}
-      TEST_CLIENT_NODE=${REMOTE_CLIENT_NODE_LIST[$i]}
+    IPERF_SERVER_EXTERNAL_IP=$(podman inspect --format "{{.NetworkSettings.IPAddress}}" $IPERF3_SERVER_NAME)
 
       if [ "$CURL" == true ]; then
         TEST_SERVER_HTTP_DST=$EXTERNAL_URL
@@ -1611,13 +1620,17 @@ if [ "$TEST_CASE" == 0 ] || [ "$TEST_CASE" == 13 ]; then
         process-curl
       fi
 
-      if [ "$IPERF" == true ]; then
-        if [ "$FT_NOTES" == true ]; then
-          echo -e "${BLUE}iperf Skipped - No external iperf server.${NC}"
-          echo
-          echo "iperf Skipped - No external iperf server." > ${IPERF_LOGS_DIR}/${TEST_FILENAME}
+      if [ "$IPERF" == true ] || [ "$HWOL" == true ]; then
+        TEST_SERVER_IPERF_DST=$IPERF_SERVER_EXTERNAL_IP
+        TEST_SERVER_IPERF_DST_PORT=$IPERF_CLUSTERIP_POD_SVC_PORT
+        if [ "$IPERF" == true ]; then
+          process-iperf
+        fi
+        if [ "$HWOL" == true ]; then
+          process-hw-offload-validation
         fi
       fi
+
 
       if [ "$OVN_TRACE" == true ]; then
         TEST_SERVER_OVNTRACE_SERVICE=
@@ -1626,21 +1639,22 @@ if [ "$TEST_CASE" == 0 ] || [ "$TEST_CASE" == 13 ]; then
         TEST_SERVER_OVNTRACE_RMTHOST=$EXTERNAL_SERVER_STRING
         process-ovn-trace
       fi
-    done
   fi
 
   echo
   echo "*** 13-b: Host -> External Network ***"
   echo
+    TEST_CLIENT_POD=$LOCAL_CLIENT_HOST_POD
+    TEST_CLIENT_NODE=$LOCAL_CLIENT_NODE
+    TEST_SERVER_CLUSTER=$EXTERNAL
+    TEST_SERVER_NODE=$EXTERNAL
+    TEST_FILENAME="13-b-host2external.txt"
+    FORWARD_TEST_FILENAME="${TEST_FILENAME:0:5}client-server-${TEST_FILENAME:5}"
+    REVERSE_TEST_FILENAME="${TEST_FILENAME:0:5}server-client-${TEST_FILENAME:5}"
+    CLIENT_HOSTBACKED_POD=true
+    SERVER_HOSTBACKED_POD=false
+    CLIENT_SERVER_SAME_NODE=false
 
-  TEST_SERVER_CLUSTER=$EXTERNAL
-  TEST_SERVER_NODE=$EXTERNAL
-  TEST_FILENAME="13-b-host2external.txt"
-
-  for i in "${!REMOTE_CLIENT_HOST_POD_LIST[@]}"
-  do
-    TEST_CLIENT_POD=${REMOTE_CLIENT_HOST_POD_LIST[$i]}
-    TEST_CLIENT_NODE=${REMOTE_CLIENT_NODE_LIST[$i]}
 
     if [ "$CURL" == true ]; then
       TEST_SERVER_HTTP_DST=$EXTERNAL_URL
@@ -1649,11 +1663,14 @@ if [ "$TEST_CASE" == 0 ] || [ "$TEST_CASE" == 13 ]; then
       process-curl
     fi
 
-    if [ "$IPERF" == true ]; then
-      if [ "$FT_NOTES" == true ]; then
-        echo -e "${BLUE}iperf Skipped - No external iperf server.${NC}"
-        echo
-        echo "iperf Skipped - No external iperf server." > iperf-logs/${TEST_FILENAME}
+    if [ "$IPERF" == true ] || [ "$HWOL" == true ]; then
+      TEST_SERVER_IPERF_DST=$IPERF_SERVER_EXTERNAL_IP
+      TEST_SERVER_IPERF_DST_PORT=$IPERF_CLUSTERIP_POD_SVC_PORT
+      if [ "$IPERF" == true ]; then
+        process-iperf
+      fi
+      if [ "$HWOL" == true ]; then
+        process-hw-offload-validation
       fi
     fi
 
@@ -1666,7 +1683,7 @@ if [ "$TEST_CASE" == 0 ] || [ "$TEST_CASE" == 13 ]; then
         echo "ovn-trace Skipped - Traffic is never in OVN, just exiting eth0 on host." > ${OVN_TRACE_LOGS_DIR}/${TEST_FILENAME}
       fi
     fi
-  done
+  SKIP_SERVER_POD_VF_REP_RESULTS=false
 fi
 
 

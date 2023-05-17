@@ -23,7 +23,8 @@ FT_MC_CO_SERVER_LABEL=${FT_MC_CO_SERVER_LABEL:-submariner.io/gateway=true}
 # Launch specific variables
 NET_ATTACH_DEF_NAME=${NET_ATTACH_DEF_NAME:-ftnetattach}
 SRIOV_RESOURCE_NAME=${SRIOV_RESOURCE_NAME:-openshift.io/mlnx_bf}
-TEST_IMAGE=${TEST_IMAGE:-quay.io/billy99/ft-base-image:0.9}
+TEST_IMAGE=${TEST_IMAGE:-quay.io/wizhao/ft-base-image:0.9}
+IPERF3_SERVER_NAME="external-iperf3-server"
 
 
 # Clean specific variables
@@ -47,6 +48,7 @@ IPERF_FORWARD_TEST_OPT=${IPERF_FORWARD_TEST_OPT:-""}
 IPERF_REVERSE_TEST_OPT=${IPERF_REVERSE_TEST_OPT:-"-R"}
 IPERF_UDP_TEST_OPT=${IPERF_UDP_TEST_OPT:-"-u -b 25G"}
 IPERF_RUN_UDP_TESTS=${IPERF_RUN_UDP_TESTS:-false}
+SKIP_SERVER_POD_VF_REP_RESULTS=${SKIP_SERVER_POD_VF_REP_RESULTS:-false}
 # Trace Control
 OVN_TRACE=${OVN_TRACE:-false}
 OVN_TRACE_CMD=${OVN_TRACE_CMD:-./ovnkube-trace -loglevel=5 -tcp}
@@ -58,9 +60,11 @@ HWOL_IPERF_TIME=${HWOL_IPERF_TIME:-150}
 HWOL_FLOW_LEARNING_TIME=${HWOL_FLOW_LEARNING_TIME:-30}
 HWOL_TCPDUMP_RUNTIME=${HWOL_TCPDUMP_RUNTIME:-5}
 HWOL_THRESHOLD_PKT_COUNT=${HWOL_THRESHOLD_PKT_COUNT:-10000}
-HWOL_THRESHOLD_LOW_PKT_RATE=${HWOL_THRESHOLD_LOW_PKT_RATE:-1000000000}
+HWOL_TCP_THRESHOLD_LOW_PKT_RATE=${HWOL_TCP_THRESHOLD_LOW_PKT_RATE:-1000000000}
+HWOL_UDP_THRESHOLD_LOW_PKT_RATE=${HWOL_UDP_THRESHOLD_LOW_PKT_RATE:-500000}
 HWOL_SUMMARY_COLUMN_DELIM=${HWOL_SUMMARY_COLUMN_DELIM:-";"}
 HWOL_INSPECT_SYSTEM_OVS_OVN=${HWOL_INSPECT_SYSTEM_OVS_OVN:-false}
+UDP_BIND_POD_ENABLED=${UDP_BIND_POD_ENABLED:-false}
 # External Access
 EXTERNAL_IP=${EXTERNAL_IP:-8.8.8.8}
 EXTERNAL_URL=${EXTERNAL_URL:-google.com}
@@ -95,6 +99,7 @@ HTTP_CLUSTERIP_KUBEAPI_EP_PORT=${HTTP_CLUSTERIP_KUBEAPI_EP_PORT:-6443}
 
 IPERF_SERVER_POD_NAME=${IPERF_SERVER_POD_NAME:-ft-iperf-server-pod-v4}
 IPERF_SERVER_HOST_POD_NAME=${IPERF_SERVER_HOST_POD_NAME:-ft-iperf-server-host-v4}
+IPERF_SERVER_HOST_POD_NAME_BIND=${IPERF_SERVER_HOST_POD_NAME_BIND:-ft-iperf-server-host-bind-v4}
 
 IPERF_CLUSTERIP_POD_SVC_NAME=${IPERF_CLUSTERIP_POD_SVC_NAME:-ft-iperf-service-clusterip-pod-v4}
 IPERF_CLUSTERIP_HOST_SVC_NAME=${IPERF_CLUSTERIP_HOST_SVC_NAME:-ft-iperf-service-clusterip-host-v4}
@@ -170,6 +175,7 @@ SERVER_NODE=
 UNKNOWN="Unknown"
 EXTERNAL="External"
 REMOTE="Remote"
+BIND_IP=$(kubectl get "nodes/${HOSTNAME_BMH_NODE_1}" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')
 
 dump-working-data() {
   echo
@@ -204,7 +210,8 @@ if [ ${COMMAND} == "test" ] ; then
   echo "    HWOL_FLOW_LEARNING_TIME            $HWOL_FLOW_LEARNING_TIME"
   echo "    HWOL_TCPDUMP_RUNTIME               $HWOL_TCPDUMP_RUNTIME"
   echo "    HWOL_THRESHOLD_PKT_COUNT           $HWOL_THRESHOLD_PKT_COUNT"
-  echo "    HWOL_THRESHOLD_LOW_PKT_RATE        $HWOL_THRESHOLD_LOW_PKT_RATE"
+  echo "    HWOL_TCP_THRESHOLD_LOW_PKT_RATE    $HWOL_TCP_THRESHOLD_LOW_PKT_RATE"
+  echo "    HWOL_UDP_THRESHOLD_LOW_PKT_RATE    $HWOL_UDP_THRESHOLD_LOW_PKT_RATE"
   echo "    HWOL_SUMMARY_COLUMN_DELIM          $HWOL_SUMMARY_COLUMN_DELIM"
   echo "    HWOL_INSPECT_SYSTEM_OVS_OVN        $HWOL_INSPECT_SYSTEM_OVS_OVN"
   echo "    IPERF                              $IPERF"
@@ -463,7 +470,7 @@ query-dynamic-data() {
   # Determine Local and Remote Nodes
   #
   if [ "$FT_CLIENTONLY" == false ] ; then
-    SERVER_POD_NODE=$(kubectl get pods -n ${FT_NAMESPACE} -o wide | grep $HTTP_SERVER_HOST_POD_NAME  | awk -F' ' '{print $7}')
+    SERVER_POD_NODE=$(kubectl get pods -n ${FT_NAMESPACE} $HTTP_SERVER_HOST_POD_NAME -o jsonpath='{.spec.nodeName}')
     SVCNAME_CLUSTER=$MY_CLUSTER
 
     # Local Client Node is the same Node Server is running on.
@@ -571,11 +578,10 @@ query-dynamic-data() {
   # Determine IP Addresses and Ports
   #
   if [ "$FT_CLIENTONLY" == false ] ; then
-    TMP_GET_PODS_STR=$(kubectl get pods -n ${FT_NAMESPACE} -o wide)
     TMP_GET_SERVICES_STR=$(kubectl get services -n ${FT_NAMESPACE})
 
-    HTTP_SERVER_HOST_IP=$(echo "${TMP_GET_PODS_STR}" | grep $HTTP_SERVER_HOST_POD_NAME  | awk -F' ' '{print $6}')
-    IPERF_SERVER_HOST_IP=$(echo "${TMP_GET_PODS_STR}" | grep $IPERF_SERVER_HOST_POD_NAME  | awk -F' ' '{print $6}')
+    HTTP_SERVER_HOST_IP=$(kubectl get pod $HTTP_SERVER_HOST_POD_NAME -n ${FT_NAMESPACE} -o jsonpath='{.status.podIP}')
+    IPERF_SERVER_HOST_IP=$(kubectl get pod $IPERF_SERVER_HOST_POD_NAME -n ${FT_NAMESPACE} -o jsonpath='{.status.podIP}')
 
     HTTP_CLUSTERIP_HOST_SVC_IPV4_LIST=($(echo "${TMP_GET_SERVICES_STR}" | grep $HTTP_CLUSTERIP_HOST_SVC_NAME | awk -F' ' '{print $3}'))
     HTTP_CLUSTERIP_HOST_SVC_PORT=$(echo "${TMP_GET_SERVICES_STR}" | grep $HTTP_CLUSTERIP_HOST_SVC_NAME | awk -F' ' '{print $5}' | awk -F/ '{print $1}')
@@ -594,8 +600,8 @@ query-dynamic-data() {
     IPERF_NODEPORT_HOST_SVC_CLUSTER_LIST=($MY_CLUSTER)
 
     if [ "$FT_HOSTONLY" == false ]; then
-      HTTP_SERVER_POD_IP=$(echo "${TMP_GET_PODS_STR}" | grep $HTTP_SERVER_POD_NAME  | awk -F' ' '{print $6}')
-      IPERF_SERVER_POD_IP=$(echo "${TMP_GET_PODS_STR}" | grep $IPERF_SERVER_POD_NAME  | awk -F' ' '{print $6}')
+      HTTP_SERVER_POD_IP=$(kubectl get pod $HTTP_SERVER_POD_NAME -n ${FT_NAMESPACE} -o jsonpath='{.status.podIP}')
+      IPERF_SERVER_POD_IP=$(kubectl get pod $IPERF_SERVER_POD_NAME -n ${FT_NAMESPACE} -o jsonpath='{.status.podIP}')
 
       HTTP_CLUSTERIP_POD_SVC_IPV4_LIST=($(echo "${TMP_GET_SERVICES_STR}" | grep $HTTP_CLUSTERIP_POD_SVC_NAME | awk -F' ' '{print $3}'))
       HTTP_CLUSTERIP_POD_SVC_PORT=$(echo "${TMP_GET_SERVICES_STR}" | grep $HTTP_CLUSTERIP_POD_SVC_NAME | awk -F' ' '{print $5}' | awk -F/ '{print $1}')

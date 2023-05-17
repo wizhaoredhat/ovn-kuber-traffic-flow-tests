@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ft-iperf-server-host-v4
+  namespace: {{ namespace }}
+  labels:
+    pod-name: ft-iperf-server-host-v4
+spec:
+  hostNetwork: true
+  dnsPolicy: ClusterFirstWithHostNet
+  containers:
+  - name: ft-iperf-server-host-v4
+    image: {{ test_image }}
+    command:
+      - "{{ iperf_cmd }}"
+    args: ["-s", "-p", "{{ iperf_clusterip_host_svc_port }}","-B", "{{ iperf_server_pod_ip }}"]
+    imagePullPolicy: IfNotPresent
+  nodeSelector:
+    ft.ServerPod: server
