@@ -175,7 +175,7 @@ SERVER_NODE=
 UNKNOWN="Unknown"
 EXTERNAL="External"
 REMOTE="Remote"
-BIND_IP=$(kubectl get "nodes/${HOSTNAME_BMH_NODE_1}" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')
+BIND_IP=$(kubectl get "nodes/${FT_REQ_SERVER_NODE}" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')
 
 dump-working-data() {
   echo
